@@ -1,673 +1,380 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>scoldc — Quadratic Limb-Darkening Coefficients</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCO LDC Calculator</title>
+<meta name="description" content="Computes quadratic limb-darkening coefficients (u1, u2) for exoplanet transit light-curve fits.">
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
 <style>
-  :root {
-    --navy:        #001f5b;
-    --navy-soft:   #1a3572;
-    --navy-ink:    #000d2e;
-    --rule:        #676a74;
-    --paper:       #ffffff;
-    --paper-deep:  #f2f1ec;
-    --body:        #000000;
-    --muted:       #6b6f7c;
-    --accent:      #b38b2d;        /* restrained brass accent */
-    --ok-bg:       #f4f7fb;
-    --warn-bg:     #fbf6ec;
-    --err-bg:      #fbeceb;
-    --err-fg:      #8a1f17;
+  body { background: #fff; font-size: 0.875rem; }
+  .btn-primary,
+  .btn-primary:focus,
+  .btn-primary:focus-visible,
+  .btn-primary:active,
+  .btn-primary:active:focus,
+  .btn-check:active+.btn-primary,
+  .btn-check:checked+.btn-primary {
+    background-color: #001f5b !important;
+    border-color: #001f5b !important;
+    box-shadow: none !important;
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: var(--paper); color: var(--body); }
+  .btn-primary:hover {
+    background-color: #001745 !important;
+    border-color: #001745 !important;
+  }
+  a { color: #001f5b; }
+  a:hover { color: #001745; }
+  h1 { font-size: 1.35rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1rem; font-weight: 600; }
+  .hint { color: #6c757d; font-weight: 400; font-size: 0.72rem; margin-left: 0.3rem; }
+  label.form-label { font-size: 0.8rem; font-weight: 500; margin-bottom: 0.1rem; }
+  .form-control, .form-select { font-size: 0.825rem; padding: 0.25rem 0.5rem; border-color: #6c757d; }
+  .form-control:focus, .form-select:focus { border-color: #001f5b; box-shadow: 0 0 0 0.2rem rgba(0,31,91,0.15); }
+  .btn { font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+  .result-value { font-size: 1.0rem; font-weight: 600; color: #001f5b; font-variant-numeric: tabular-nums; line-height: 1; }
+  .result-label { font-style: italic; color: #6c757d; font-size: 0.85rem; margin-bottom: 0.05rem; }
+  .law-eq { font-style: italic; color: #495057; font-size: 0.825rem; }
+  footer { color: #6c757d; font-size: 0.75rem; }
+  .placeholder-dash { color: #adb5bd; }
+  .table-sm td { padding: 0.2rem 0.35rem; font-size: 0.75rem; }
+  hr { margin: 0.75rem 0; }
+  .mb-3 { margin-bottom: 0.5rem !important; }
+  .container.py-3 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
 
-  body {
-    font-family: 'Inter', -apple-system, sans-serif;
-    font-size: 15px;
-    line-height: 1.45;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  /* Decorative top rule ------------------------------------------------- */
-  .top-rule {
-    height: 4px;
-    background: var(--navy);
-  }
-
-  /* Header ------------------------------------------------------------- */
-  header {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 28px 32px 12px;
-  }
-  .eyebrow {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 0 0 4px 0;
-  }
-  h1 {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
-    font-weight: 400;
-    font-size: 24px;
-    line-height: 1.1;
-    letter-spacing: -0.01em;
-    color: var(--navy-ink);
-    margin: 0 0 4px 0;
-  }
-  .subtitle {
-    color: var(--muted);
-    font-size: 12px;
-    margin: 0;
-    max-width: 620px;
-  }
-
-  /* Divider ------------------------------------------------------------ */
-  .divider {
-    max-width: 960px;
-    margin: 16px auto 0;
-    padding: 0 32px;
-  }
-  .divider > span {
-    display: block;
-    height: 1px;
-    background: var(--rule);
-  }
-
-  /* Main grid ---------------------------------------------------------- */
-  main {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 16px 32px 28px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 28px;
-    align-items: start;
-  }
-  @media (max-width: 820px) {
-    main { grid-template-columns: 1fr; gap: 20px; }
-    h1 { font-size: 34px; }
-  }
-
-  /* Section titles ----------------------------------------------------- */
-  .section-title {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--navy);
-    margin: 0 0 12px 0;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--rule);
-  }
-  .section-title .num {
-    color: var(--accent);
-    margin-right: 10px;
-  }
-
-  /* Form --------------------------------------------------------------- */
-  .field { margin-bottom: 12px; }
-  .field label {
-    display: block;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--navy-ink);
-    margin-bottom: 4px;
-  }
-  .field .hint {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 4px;
-    min-height: 1em;
-  }
-  .field .hint .bad { color: var(--err-fg); font-weight: 600; }
-  input[type="number"], select {
-    width: 100%;
-    padding: 10px 12px;
-    font-family: 'Inter', sans-serif;
-    font-size: 15px;
-    color: var(--body);
-    background: #fff;
-    border: 1px solid var(--rule);
-    border-radius: 3px;
-    transition: border-color 120ms ease, box-shadow 120ms ease;
-  }
-  input[type="number"]:focus, select:focus {
-    outline: none;
-    border-color: var(--navy);
-    box-shadow: 0 0 0 3px rgba(0, 31, 91, 0.12);
-  }
-  input[type="number"]:disabled, select:disabled {
-    background: var(--paper-deep);
-    color: var(--muted);
-    cursor: not-allowed;
-  }
-
-  button.compute {
-    width: 100%;
-    margin-top: 6px;
-    padding: 13px 16px;
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #fff;
-    background: var(--navy);
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: background 120ms ease;
-  }
-  button.compute:hover { background: var(--navy-soft); }
-  button.compute:disabled { background: var(--muted); cursor: not-allowed; }
-
-  /* Results card ------------------------------------------------------- */
-  .result-card {
-    background: #fff;
-    border: 1px solid var(--rule);
-    border-top: 3px solid var(--navy);
-    padding: 16px 20px 14px;
-    border-radius: 2px;
-    min-height: 240px;
-  }
-  .placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 180px;
-    color: var(--muted);
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic;
-    font-size: 18px;
-    text-align: center;
-  }
-
-  .coefs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    margin-bottom: 14px;
-  }
-  .coef-box {
-    padding: 12px 14px;
-    background: var(--ok-bg);
-    border-left: 3px solid var(--navy);
-  }
-  .coef-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: var(--navy);
-    letter-spacing: 0.08em;
-    margin-bottom: 6px;
-  }
-  .coef-value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 28px;
-    font-weight: 500;
-    color: var(--navy-ink);
-    letter-spacing: -0.01em;
-  }
-
-  .meta {
-    font-size: 13px;
-    color: var(--body);
-    line-height: 1.5;
-  }
-  .meta dt {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
-    float: left;
-    width: 110px;
-    clear: left;
-  }
-  .meta dd {
-    margin: 0 0 4px 110px;
-    color: var(--body);
-  }
-  .meta .citation {
-    font-style: italic;
-    color: var(--muted);
-  }
-
-  .ld-equation {
-    margin-top: 12px;
-    padding: 10px 14px;
-    background: var(--paper-deep);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    color: var(--navy-ink);
-    border-radius: 2px;
-    text-align: center;
-  }
-
-  .error-box {
-    background: var(--err-bg);
-    border-left: 3px solid var(--err-fg);
-    color: var(--err-fg);
-    padding: 14px 16px;
-    font-size: 13px;
-    border-radius: 2px;
-  }
-  .warn-box {
-    background: var(--warn-bg);
-    border-left: 3px solid var(--accent);
-    color: var(--navy-ink);
-    padding: 10px 14px;
-    font-size: 12px;
-    border-radius: 2px;
-    margin-top: 14px;
-    font-style: italic;
-  }
-
-  /* Methodology -------------------------------------------------------- */
-  .methodology {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 14px 32px 28px;
-  }
-  .methodology h2 {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--navy);
-    margin: 0 0 10px 0;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--rule);
-  }
-  .methodology h2 .num { color: var(--accent); margin-right: 10px; }
-  .methodology p {
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--body);
-    max-width: 760px;
-    margin: 0 0 8px 0;
-  }
-  .methodology .refs {
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px dashed var(--rule);
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.6;
-  }
-  .methodology .refs .ref-line {
-    font-family: 'Inter', sans-serif;
-  }
-  .methodology .refs .ref-tag {
-    font-family: 'JetBrains Mono', monospace;
-    color: var(--navy);
-    font-weight: 500;
-    margin-right: 8px;
-  }
-
-  /* Footer ------------------------------------------------------------- */
-  footer {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 16px 32px 24px;
-    border-top: 1px solid var(--rule);
-    text-align: center;
-    font-size: 12px;
-    color: var(--muted);
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic;
-    font-size: 14px;
-  }
-
-  /* Filter select: group headers styled -------------------------------- */
-  select optgroup { font-style: normal; font-weight: 600; color: var(--navy); }
-  select option { font-weight: 400; color: var(--body); }
+  /* Force all text above Methodology to black */
+  .top-section,
+  .top-section .text-muted,
+  .top-section .hint,
+  .top-section .result-label,
+  .top-section .law-eq,
+  .top-section .table-sm td,
+  .top-section label.form-label { color: #000 !important; }
 </style>
 </head>
+
 <body>
 
-<div class="top-rule"></div>
+<div class="container py-3" style="max-width: 820px; margin-top: 1.5rem;">
 
-<header>
-  <p class="eyebrow">Sycamore Canyon Observatory</p>
-  <h1>Quadratic Limb-Darkening Coefficients</h1>
-  <p class="subtitle">Quadratic limb-darkening coefficients for exoplanet transit
-    photometry, computed by trilinear interpolation of published Claret tables.</p>
-</header>
+  <div class="top-section">
 
-<div class="divider"><span></span></div>
+  <h1 class="mb-1">SCO LDC Calculator</h1>
+  <p class="text-muted small mb-0">
+    Computes the two quadratic limb-darkening coefficients (u<sub>1</sub>, u<sub>2</sub>)
+    for exoplanet transit light-curve fits, by trilinear interpolation of published
+    Claret tables in T<sub>eff</sub>, log(g), and [Fe/H].
+    <a href="#methodology">* Methodology</a>
+  </p>
 
-<main>
-  <!-- ============ Inputs ============ -->
-  <section aria-labelledby="inputs-title">
-    <h2 class="section-title" id="inputs-title"><span class="num">01</span>Stellar Parameters</h2>
+  <hr>
 
-    <div class="field">
-      <label for="filter-select">Filter</label>
-      <select id="filter-select"></select>
-      <div class="hint" id="filter-hint">&nbsp;</div>
+  <div class="row g-3">
+
+    <!-- INPUTS -->
+    <div class="col-md-6">
+      <h2 class="mb-2">Inputs</h2>
+
+      <form id="form" autocomplete="off">
+
+        <div class="mb-3">
+          <label for="teff" class="form-label">
+            T<sub>eff</sub> (K)<span class="hint" id="teffHint">&nbsp;</span>
+          </label>
+          <input type="number" class="form-control" id="teff" name="teff" step="1" value="5778" required="">
+        </div>
+
+        <div class="mb-3">
+          <label for="logg" class="form-label">
+            log(g) (cgs dex)<span class="hint" id="loggHint">&nbsp;</span>
+          </label>
+          <input type="number" class="form-control" id="logg" name="logg" step="0.01" value="4.44" required="">
+        </div>
+
+        <div class="mb-3">
+          <label for="feh" class="form-label">
+            [Fe/H] (dex)<span class="hint" id="fehHint">&nbsp;</span>
+          </label>
+          <input type="number" class="form-control" id="feh" name="feh" step="0.01" value="0.0" required="">
+        </div>
+
+        <div class="mb-3">
+          <label for="filter" class="form-label">Filter</label>
+          <select class="form-select" id="filter" name="filter" required=""></select>
+        </div>
+
+        <div class="mb-3">
+          <label for="model" class="form-label">Stellar atmosphere model</label>
+          <select class="form-select" id="model" name="model"></select>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Compute LDCs</button>
+          <button type="button" class="btn btn-outline-secondary" id="exampleBtn">Fill Example</button>
+          <button type="button" class="btn btn-outline-secondary" id="clearBtn">Clear</button>
+        </div>
+
+        <div id="status" class="mt-2 small text-muted"></div>
+      </form>
     </div>
 
-    <div class="field">
-      <label for="model-select">Stellar Atmosphere Model</label>
-      <select id="model-select"></select>
-      <div class="hint" id="model-hint">&nbsp;</div>
+    <!-- RESULTS -->
+    <div class="col-md-6">
+      <h2 class="mb-2">Results</h2>
+
+      <div class="d-flex gap-4 mb-3">
+        <div>
+          <div class="result-label">u<sub>1</sub></div>
+          <div class="result-value placeholder-dash" id="u1">—</div>
+        </div>
+        <div>
+          <div class="result-label">u<sub>2</sub></div>
+          <div class="result-value placeholder-dash" id="u2">—</div>
+        </div>
+      </div>
+      <table class="table table-sm mb-2">
+        <tbody id="metaTable">
+          <tr><td>Filter</td><td id="m_filter">—</td></tr>
+          <tr><td>Model</td><td id="m_model">—</td></tr>
+          <tr><td>Method</td><td id="m_method">—</td></tr>
+          <tr><td>Source</td><td id="m_source">—</td></tr>
+        </tbody>
+      </table>
+      <p class="law-eq mb-0">
+        I(μ) / I(1) = 1 − u<sub>1</sub>·(1−μ) − u<sub>2</sub>·(1−μ)²
+      </p>
     </div>
 
-    <div class="field">
-      <label for="teff">Effective Temperature <span style="color:var(--muted);font-weight:400;">(K)</span></label>
-      <input type="number" id="teff" step="1" value="5778" />
-      <div class="hint" id="teff-hint">&nbsp;</div>
-    </div>
-
-    <div class="field">
-      <label for="logg">Surface Gravity log g <span style="color:var(--muted);font-weight:400;">(cgs dex)</span></label>
-      <input type="number" id="logg" step="0.01" value="4.44" />
-      <div class="hint" id="logg-hint">&nbsp;</div>
-    </div>
-
-    <div class="field">
-      <label for="feh">Metallicity [Fe/H] <span style="color:var(--muted);font-weight:400;">(dex)</span></label>
-      <input type="number" id="feh" step="0.1" value="0.0" />
-      <div class="hint" id="feh-hint">&nbsp;</div>
-    </div>
-
-    <button class="compute" id="compute-btn">Compute Coefficients</button>
-  </section>
-
-  <!-- ============ Results ============ -->
-  <section aria-labelledby="results-title">
-    <h2 class="section-title" id="results-title"><span class="num">02</span>Results</h2>
-    <div class="result-card" id="result-card">
-      <div class="placeholder">Enter stellar parameters and select a filter to compute u₁, u₂.</div>
-    </div>
-  </section>
-</main>
-
-<!-- ============ Methodology ============ -->
-<section class="methodology">
-  <h2><span class="num">03</span>Methodology</h2>
-  <p>Quadratic limb-darkening coefficients are obtained by trilinear interpolation
-  of published tables in T<sub>eff</sub>, log g, and [Fe/H]. For Johnson–Cousins,
-  Sloan/SDSS, Strömgren, Kepler, CoRoT, and Spitzer filters, coefficients are from
-  Claret &amp; Bloemen (2011) using ATLAS9 plane-parallel models with the least-squares
-  fitting method (100 equally-spaced μ points). For TESS, coefficients are from
-  Claret (2018) using PHOENIX-COND spherical models at solar metallicity. For CBB,
-  coefficients are from Claret, Mullen &amp; Gary (2022) using ATLAS9 plane-parallel
-  models.</p>
-  <p>The quadratic limb-darkening law is
-  <em>I(μ)/I(1) = 1 − u<sub>1</sub>(1 − μ) − u<sub>2</sub>(1 − μ)<sup>2</sup></em>,
-  where μ = cos θ is the cosine of the angle between the line of sight and the
-  stellar surface normal. Microturbulent velocity is fixed at ξ = 2.0 km/s, the
-  standard value for transit work. The LSM (least-squares) fitting method is used
-  throughout. No extrapolation is performed beyond the grid boundaries.</p>
-
-  <div class="refs">
-    <div class="ref-line"><span class="ref-tag">CB2011</span>Claret, A. &amp; Bloemen, S., 2011, A&amp;A, 529, A75</div>
-    <div class="ref-line"><span class="ref-tag">C2018</span>Claret, A., 2018, A&amp;A, 618, A20</div>
-    <div class="ref-line"><span class="ref-tag">CMG2022</span>Claret, A., Mullen, E. &amp; Gary, B., 2022, RNAAS, 6, 169</div>
   </div>
-</section>
 
-<footer>
-  Provided by Ed Mullen, Sycamore Canyon Observatory
-</footer>
+  </div><!-- /.top-section -->
 
+  <hr>
+
+  <h2 id="methodology" style="color: #000;">Methodology</h2>
+  <p class="small text-muted mb-2">
+    Quadratic limb-darkening coefficients are obtained by trilinear interpolation of
+    published tables in T<sub>eff</sub>, log(g), and [Fe/H]. For Johnson–Cousins,
+    Sloan/SDSS, Strömgren, Kepler, CoRoT, and Spitzer filters, coefficients are from
+    <a href="https://www.aanda.org/articles/aa/abs/2011/05/aa16451-10/aa16451-10.html" target="_blank" rel="noopener">Claret &amp; Bloemen (2011)</a>
+    using ATLAS9 plane-parallel models with the least-squares fitting method
+    (100 equally-spaced μ points). For TESS, coefficients are from
+    <a href="https://www.aanda.org/articles/aa/abs/2018/10/aa33060-18/aa33060-18.html" target="_blank" rel="noopener">Claret (2018)</a>
+    using PHOENIX-COND spherical models at solar metallicity.
+  </p>
+
+  <p class="small text-muted mb-2">
+    For the CBB (Blue Blocking Exoplanet) filter, coefficients are from
+    <a href="https://iopscience.iop.org/article/10.3847/2515-5172/ac8c3f" target="_blank" rel="noopener">Claret, Mullen &amp; Gary (2022) <em>RNAAS</em></a>,
+    which were derived specifically for this filter using ATLAS9 atmosphere models.
+  </p>
+
+  <p class="small text-muted mb-0">
+    The quadratic limb-darkening law is
+    <em>I(μ)/I(1) = 1 − u<sub>1</sub>(1 − μ) − u<sub>2</sub>(1 − μ)<sup>2</sup></em>,
+    where μ = cos θ is the cosine of the angle between the line of sight and the
+    stellar surface normal. Microturbulent velocity is fixed at ξ = 2.0 km/s, the
+    standard value for transit work. The LSM (least-squares) fitting method is used
+    throughout. No extrapolation is performed beyond the grid boundaries.
+  </p>
+
+  <hr>
+
+  <footer class="text-center pb-2">
+    Provided by Ed Mullen, Sycamore Canyon Observatory
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-(() => {
-  "use strict";
+const $ = (id) => document.getElementById(id);
+const form = $('form');
+const submitBtn = $('submitBtn');
+const statusEl = $('status');
 
-  // ------------------------------------------------------------------
-  // State
-  // ------------------------------------------------------------------
-  let FILTERS = [];                   // full filter registry from /api/filters
-  let currentFilter = null;           // selected filter object
-  let currentModelEntry = null;       // selected model entry within the filter
+// State shared between filter/model/hint handlers
+let FILTERS = [];
+let currentFilter = null;
+let currentModelEntry = null;
 
-  const elFilter  = document.getElementById("filter-select");
-  const elModel   = document.getElementById("model-select");
-  const elTeff    = document.getElementById("teff");
-  const elLogg    = document.getElementById("logg");
-  const elFeh     = document.getElementById("feh");
-  const elBtn     = document.getElementById("compute-btn");
-  const elCard    = document.getElementById("result-card");
-
-  const hints = {
-    filter: document.getElementById("filter-hint"),
-    model:  document.getElementById("model-hint"),
-    teff:   document.getElementById("teff-hint"),
-    logg:   document.getElementById("logg-hint"),
-    feh:    document.getElementById("feh-hint"),
-  };
-
-  // ------------------------------------------------------------------
-  // Populate filter dropdown, grouped by category
-  // ------------------------------------------------------------------
-  async function loadFilters() {
-    const r = await fetch("/api/filters");
-    const data = await r.json();
+async function loadFilters() {
+  try {
+    const resp = await fetch('/api/filters');
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
     FILTERS = data.filters;
+    const sel = $('filter');
+    sel.innerHTML = '';
 
-    // Group by category, preserving registry order within each group.
+    // Group by category, preserving registry order.
     const groups = new Map();
     for (const f of FILTERS) {
       if (!groups.has(f.category)) groups.set(f.category, []);
       groups.get(f.category).push(f);
     }
-
-    elFilter.innerHTML = "";
-    // Desired category order:
-    const order = ["Johnson-Cousins", "Sloan/SDSS", "Strömgren", "Space-based", "Exoplanet"];
-    for (const cat of order) {
+    const catOrder = ["Johnson-Cousins", "Sloan/SDSS", "Strömgren", "Space-based", "Exoplanet"];
+    for (const cat of catOrder) {
       if (!groups.has(cat)) continue;
-      const og = document.createElement("optgroup");
+      const og = document.createElement('optgroup');
       og.label = cat;
       for (const f of groups.get(cat)) {
-        const opt = document.createElement("option");
+        const opt = document.createElement('option');
         opt.value = f.code;
-        opt.textContent = `${f.name}  (${f.code})`;
+        opt.textContent = `${f.name} (${f.code})`;
         og.appendChild(opt);
       }
-      elFilter.appendChild(og);
+      sel.appendChild(og);
     }
 
-    // Default selection: Kepler. Falls back to first filter if not present.
-    const hasKp = FILTERS.some(f => f.code === "Kp");
-    elFilter.value = hasKp ? "Kp" : FILTERS[0].code;
+    // Default: Kepler (Kp) for a sun-like example.
+    sel.value = FILTERS.some(f => f.code === 'Kp') ? 'Kp' : FILTERS[0].code;
+
+    sel.addEventListener('change', onFilterChange);
+    $('model').addEventListener('change', onModelChange);
     onFilterChange();
+  } catch (e) {
+    statusEl.textContent = 'Could not load filters: ' + e.message;
+    statusEl.classList.add('text-danger');
   }
+}
+loadFilters();
 
-  // ------------------------------------------------------------------
-  // Filter / model change handlers
-  // ------------------------------------------------------------------
-  function onFilterChange() {
-    currentFilter = FILTERS.find(f => f.code === elFilter.value);
-    hints.filter.innerHTML = `Source: <em>${currentFilter.citation}</em>`;
-    // Populate model dropdown with whatever models are available for this filter.
-    elModel.innerHTML = "";
-    // ATLAS first when available; else first entry.
-    const models = [...currentFilter.models];
-    models.sort((a, b) => {
-      const order = { "ATLAS": 0, "PHOENIX": 1, "PHOENIX-COND": 2 };
-      return (order[a.model] ?? 9) - (order[b.model] ?? 9);
-    });
-    for (const m of models) {
-      const opt = document.createElement("option");
-      opt.value = m.model;
-      opt.textContent = m.model;
-      elModel.appendChild(opt);
-    }
-    elModel.value = models[0].model;
-    onModelChange();
-  }
-
-  function onModelChange() {
-    if (!currentFilter) return;
-    currentModelEntry = currentFilter.models.find(m => m.model === elModel.value);
-    if (!currentModelEntry) return;
-
-    // Update range hints.
-    const e = currentModelEntry;
-    hints.teff.innerHTML = `Grid range: <strong>${fmtT(e.teff_min)} – ${fmtT(e.teff_max)} K</strong>`;
-    hints.logg.innerHTML = `Grid range: <strong>${e.logg_min.toFixed(1)} – ${e.logg_max.toFixed(1)}</strong>`;
-
-    // [Fe/H] axis: if only one value, disable the field and note it.
-    if (e.feh_fixed) {
-      elFeh.value = e.feh_min.toFixed(1);
-      elFeh.disabled = true;
-      hints.feh.innerHTML = `<strong>Solar metallicity only</strong> (${signed(e.feh_min)})`;
-    } else {
-      elFeh.disabled = false;
-      hints.feh.innerHTML = `Grid range: <strong>${signed(e.feh_min)} to ${signed(e.feh_max)}</strong>`;
-    }
-
-    // Clear any prior per-input validation messages.
-    validateInputs();
-  }
-
-  function fmtT(t) { return t >= 1000 ? t.toFixed(0) : t.toFixed(0); }
-  function signed(v) { return (v >= 0 ? "+" : "") + v.toFixed(1); }
-
-  // ------------------------------------------------------------------
-  // Client-side bounds check (purely advisory; server is authoritative)
-  // ------------------------------------------------------------------
-  function validateInputs() {
-    if (!currentModelEntry) return true;
-    const e = currentModelEntry;
-    let ok = true;
-    const t = parseFloat(elTeff.value);
-    const g = parseFloat(elLogg.value);
-    const z = parseFloat(elFeh.value);
-    if (!isFinite(t) || t < e.teff_min || t > e.teff_max) {
-      hints.teff.innerHTML = `<span class="bad">Outside grid range ${fmtT(e.teff_min)}–${fmtT(e.teff_max)} K</span>`;
-      ok = false;
-    } else {
-      hints.teff.innerHTML = `Grid range: <strong>${fmtT(e.teff_min)} – ${fmtT(e.teff_max)} K</strong>`;
-    }
-    if (!isFinite(g) || g < e.logg_min || g > e.logg_max) {
-      hints.logg.innerHTML = `<span class="bad">Outside grid range ${e.logg_min.toFixed(1)}–${e.logg_max.toFixed(1)}</span>`;
-      ok = false;
-    } else {
-      hints.logg.innerHTML = `Grid range: <strong>${e.logg_min.toFixed(1)} – ${e.logg_max.toFixed(1)}</strong>`;
-    }
-    if (!e.feh_fixed) {
-      if (!isFinite(z) || z < e.feh_min || z > e.feh_max) {
-        hints.feh.innerHTML = `<span class="bad">Outside grid range ${signed(e.feh_min)} to ${signed(e.feh_max)}</span>`;
-        ok = false;
-      } else {
-        hints.feh.innerHTML = `Grid range: <strong>${signed(e.feh_min)} to ${signed(e.feh_max)}</strong>`;
-      }
-    }
-    return ok;
-  }
-
-  // ------------------------------------------------------------------
-  // Compute
-  // ------------------------------------------------------------------
-  async function compute() {
-    if (!currentFilter || !currentModelEntry) return;
-    if (!validateInputs()) {
-      renderError("Please correct the highlighted inputs.");
-      return;
-    }
-    const params = new URLSearchParams({
-      teff:   elTeff.value,
-      logg:   elLogg.value,
-      feh:    elFeh.value,
-      filter: currentFilter.code,
-      model:  currentModelEntry.model,
-    });
-
-    elBtn.disabled = true;
-    elBtn.textContent = "Computing…";
-    try {
-      const r = await fetch(`/api/compute?${params.toString()}`);
-      const body = await r.json();
-      if (!r.ok) {
-        renderError(body.detail || "Computation failed.");
-        return;
-      }
-      renderResult(body);
-    } catch (err) {
-      renderError("Network error: " + err.message);
-    } finally {
-      elBtn.disabled = false;
-      elBtn.textContent = "Compute Coefficients";
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Render
-  // ------------------------------------------------------------------
-  function renderResult(r) {
-    const onGrid = r.grid.on_grid;
-    const bT = r.grid.teff_bracket, bG = r.grid.logg_bracket, bZ = r.grid.feh_bracket;
-    const bracketStr =
-      `T: [${bT[0]}, ${bT[1]}] K &nbsp;·&nbsp; ` +
-      `log g: [${bG[0].toFixed(2)}, ${bG[1].toFixed(2)}] &nbsp;·&nbsp; ` +
-      `[Fe/H]: [${signed(bZ[0])}, ${signed(bZ[1])}]`;
-
-    elCard.innerHTML = `
-      <div class="coefs">
-        <div class="coef-box">
-          <div class="coef-label">u₁</div>
-          <div class="coef-value">${r.u1.toFixed(4)}</div>
-        </div>
-        <div class="coef-box">
-          <div class="coef-label">u₂</div>
-          <div class="coef-value">${r.u2.toFixed(4)}</div>
-        </div>
-      </div>
-      <dl class="meta">
-        <dt>Filter</dt><dd>${escapeHtml(r.filter_name)} &nbsp;<span style="color:var(--muted)">(${escapeHtml(r.filter_code)})</span></dd>
-        <dt>Model</dt><dd>${escapeHtml(r.model)}</dd>
-        <dt>Method</dt><dd>${onGrid ? "Direct table value (on grid)" : "Trilinear interpolation"}</dd>
-        <dt>Brackets</dt><dd style="font-family:'JetBrains Mono',monospace;font-size:12px;">${bracketStr}</dd>
-        <dt>Source</dt><dd class="citation">${escapeHtml(r.citation)}</dd>
-      </dl>
-      <div class="ld-equation">
-        I(μ)/I(1) &nbsp;=&nbsp; 1 − ${r.u1.toFixed(4)}·(1−μ) − ${r.u2.toFixed(4)}·(1−μ)²
-      </div>
-    `;
-  }
-
-  function renderError(msg) {
-    elCard.innerHTML = `<div class="error-box"><strong>Unable to compute:</strong> ${escapeHtml(msg)}</div>`;
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    }[c]));
-  }
-
-  // ------------------------------------------------------------------
-  // Wire up events
-  // ------------------------------------------------------------------
-  elFilter.addEventListener("change", onFilterChange);
-  elModel.addEventListener("change", onModelChange);
-  elTeff.addEventListener("input", validateInputs);
-  elLogg.addEventListener("input", validateInputs);
-  elFeh.addEventListener("input", validateInputs);
-  elBtn.addEventListener("click", compute);
-  // Enter key in any input triggers compute.
-  [elTeff, elLogg, elFeh].forEach(el =>
-    el.addEventListener("keydown", e => { if (e.key === "Enter") compute(); })
-  );
-
-  loadFilters().catch(err => {
-    elFilter.innerHTML = "<option>Error loading filters</option>";
-    renderError("Failed to load filter registry: " + err.message);
+function onFilterChange() {
+  currentFilter = FILTERS.find(f => f.code === $('filter').value);
+  if (!currentFilter) return;
+  // Populate the model dropdown with this filter's available models.
+  const mSel = $('model');
+  mSel.innerHTML = '';
+  const models = [...currentFilter.models].sort((a, b) => {
+    const o = { 'ATLAS': 0, 'PHOENIX': 1, 'PHOENIX-COND': 2 };
+    return (o[a.model] ?? 9) - (o[b.model] ?? 9);
   });
-})();
+  for (const m of models) {
+    const opt = document.createElement('option');
+    opt.value = m.model;
+    opt.textContent = m.model;
+    mSel.appendChild(opt);
+  }
+  mSel.value = models[0].model;
+  onModelChange();
+}
+
+function onModelChange() {
+  if (!currentFilter) return;
+  currentModelEntry = currentFilter.models.find(m => m.model === $('model').value);
+  if (!currentModelEntry) return;
+  updateHints();
+}
+
+function signed(v) { return (v >= 0 ? '+' : '') + Number(v).toFixed(1); }
+
+function updateHints() {
+  const e = currentModelEntry;
+  $('teffHint').textContent = `${e.teff_min.toFixed(0)} – ${e.teff_max.toFixed(0)}`;
+  $('loggHint').textContent = `${e.logg_min.toFixed(1)} – ${e.logg_max.toFixed(1)}`;
+  if (e.feh_fixed) {
+    $('fehHint').textContent = `${signed(e.feh_min)} only (solar)`;
+    $('feh').value = e.feh_min.toFixed(1);
+    $('feh').disabled = true;
+  } else {
+    $('fehHint').textContent = `${signed(e.feh_min)} to ${signed(e.feh_max)}`;
+    $('feh').disabled = false;
+  }
+}
+
+function setBusy(on, msg) {
+  submitBtn.disabled = on;
+  if (on) {
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Computing…';
+    statusEl.textContent = msg || '';
+    statusEl.classList.remove('text-danger', 'text-success');
+    statusEl.classList.add('text-muted');
+  } else {
+    submitBtn.innerHTML = 'Compute LDCs';
+  }
+}
+
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  if (!currentFilter || !currentModelEntry) return;
+
+  const params = new URLSearchParams({
+    teff:   $('teff').value,
+    logg:   $('logg').value,
+    feh:    $('feh').value,
+    filter: currentFilter.code,
+    model:  currentModelEntry.model,
+  });
+
+  setBusy(true, '');
+  clearResult();
+
+  try {
+    const resp = await fetch('/api/compute?' + params.toString());
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    showResult(data);
+    statusEl.textContent = data.grid && data.grid.on_grid ? 'Exact grid point.' : 'Interpolated.';
+    statusEl.classList.remove('text-danger', 'text-muted');
+    statusEl.classList.add('text-success');
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+    statusEl.classList.remove('text-success', 'text-muted');
+    statusEl.classList.add('text-danger');
+    clearResult();
+  } finally {
+    setBusy(false);
+  }
+});
+
+function fmt(x) {
+  return (x >= 0 ? '+' : '') + x.toFixed(4);
+}
+
+function showResult(d) {
+  $('u1').textContent = fmt(d.u1);
+  $('u2').textContent = fmt(d.u2);
+  $('u1').classList.remove('placeholder-dash');
+  $('u2').classList.remove('placeholder-dash');
+  $('m_filter').textContent = `${d.filter_name} (${d.filter_code})`;
+  $('m_model').textContent  = d.model;
+  $('m_method').textContent = (d.grid && d.grid.on_grid) ? 'Direct table value (on grid)' : 'Trilinear interpolation';
+  $('m_source').textContent = d.citation || '—';
+}
+
+function clearResult() {
+  $('u1').textContent = '—'; $('u1').classList.add('placeholder-dash');
+  $('u2').textContent = '—'; $('u2').classList.add('placeholder-dash');
+  ['m_filter','m_model','m_method','m_source'].forEach(id => $(id).textContent = '—');
+}
+
+$('exampleBtn').addEventListener('click', () => {
+  // Sun-like star in Kepler/ATLAS.
+  $('filter').value = 'Kp';
+  onFilterChange();
+  $('model').value = 'ATLAS';
+  onModelChange();
+  $('teff').value = 5778;
+  $('logg').value = 4.44;
+  if (!$('feh').disabled) $('feh').value = 0.0;
+  statusEl.textContent = '';
+  statusEl.classList.remove('text-danger', 'text-success');
+  statusEl.classList.add('text-muted');
+});
+
+$('clearBtn').addEventListener('click', () => {
+  $('teff').value = '';
+  $('logg').value = '';
+  if (!$('feh').disabled) $('feh').value = '';
+  clearResult();
+  statusEl.textContent = '';
+  statusEl.classList.remove('text-danger', 'text-success');
+  statusEl.classList.add('text-muted');
+});
 </script>
+
 </body>
 </html>
