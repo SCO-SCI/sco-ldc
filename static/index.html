@@ -52,9 +52,7 @@
   .top-section .result-label,
   .top-section .law-eq,
   .top-section .table-sm td,
-  .top-section label.form-label { color: #000 !important; }
-  
-  
+  .top-section label.form-label { color: #000 !important; } 
   
   #methodology ~ p.text-muted { color: #000 !important; }
   
@@ -163,7 +161,7 @@
   <p class="small text-muted mb-2">
     Quadratic limb-darkening coefficients are obtained by trilinear interpolation of
     published tables in T<sub>eff</sub>, log(g), and [Fe/H]. For Johnson–Cousins,
-    Sloan/SDSS, Strömgren, Kepler, CoRoT, and Spitzer filters, coefficients are from
+    Sloan/SDSS, Stromgren, Kepler, CoRoT, and Spitzer filters, coefficients are from
     <a href="https://www.aanda.org/articles/aa/abs/2011/05/aa16451-10/aa16451-10.html" target="_blank" rel="noopener">Claret &amp; Bloemen (2011)</a>
     using ATLAS9 plane-parallel models with the least-squares fitting method
     (100 equally-spaced μ points). For TESS, coefficients are from
@@ -221,7 +219,7 @@ async function loadFilters() {
       if (!groups.has(f.category)) groups.set(f.category, []);
       groups.get(f.category).push(f);
     }
-    const catOrder = ["Johnson-Cousins", "Sloan/SDSS", "Strömgren", "Space-based", "Exoplanet"];
+    const catOrder = ["Johnson-Cousins", "Sloan/SDSS", "Stromgren", "Space-based", "Exoplanet"];
     for (const cat of catOrder) {
       if (!groups.has(cat)) continue;
       const og = document.createElement('optgroup');
