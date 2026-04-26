@@ -224,7 +224,7 @@ async function loadFilters() {
       if (!groups.has(f.category)) groups.set(f.category, []);
       groups.get(f.category).push(f);
     }
-    const catOrder = ["Johnson-Cousins", "Sloan/SDSS", "Stromgren", "Space-based", "Exoplanet"];
+    const catOrder = ["Johnson-Cousins", "Sloan/SDSS", "Strömgren", "Space-based", "Exoplanet"];
     for (const cat of catOrder) {
       if (!groups.has(cat)) continue;
       const og = document.createElement('optgroup');
