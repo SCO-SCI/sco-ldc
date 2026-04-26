@@ -298,7 +298,7 @@ def _parse_cbbquadratic(path: str) -> int:
 import pickle
 
 CACHE_FILENAME = "tables.pkl"
-CACHE_VERSION = 1        # bump if _TABLES layout changes
+CACHE_VERSION = 2        # bump if _TABLES layout changes
 SOURCE_FILES = ("tableab.dat", "table5.dat", "CBBQUADRATIC.txt")
 
 
