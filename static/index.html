@@ -55,6 +55,48 @@
   .top-section label.form-label { color: #000 !important; } 
   
   #methodology ~ p.text-muted { color: #000 !important; }
+
+  /* Copy LDCs button — appears in the Results heading after a successful query */
+  .copy-btn {
+    background: transparent;
+    border: 1px solid #5474a5;
+    padding: 0.15rem 0.5rem;
+    margin-left: 0.5rem;
+    color: #5474a5;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: all 0.15s ease;
+  }
+  .copy-btn:hover { background: #5474a5; color: #fff; }
+  .copy-btn:active { background: #001745; border-color: #001745; }
+  .copy-btn.copied-feedback { color: #1d7a3e; border-color: #1d7a3e; background: transparent; }
+  .copy-btn.copied-feedback:hover { background: transparent; color: #1d7a3e; }
+  .copy-btn[hidden] { display: none; }
+
+  /* Toast for clipboard-copy feedback */
+  .copy-toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1d7a3e;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 9999;
+  }
+  .copy-toast.show { opacity: 1; }
   
 </style>
 </head>
@@ -131,7 +173,16 @@
 
     <!-- RESULTS -->
     <div class="col-md-6">
-      <h2 class="mb-2">Results</h2>
+      <h2 class="mb-2">
+        Results
+        <button type="button" class="copy-btn" id="copyBtn" hidden title="Copy LDCs to clipboard" aria-label="Copy LDCs to clipboard">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M4 0a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2v-1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v2h1V2a2 2 0 0 0-2-2H4z"/>
+            <path d="M6 4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H8z"/>
+          </svg>
+          <span id="copyBtnLabel">Copy</span>
+        </button>
+      </h2>
 
       <div class="d-flex gap-4 mb-3">
         <div>
@@ -193,6 +244,9 @@
   </footer>
 
 </div>
+
+<!-- Toast for clipboard-copy feedback -->
+<div class="copy-toast" id="copyToast" role="status" aria-live="polite">Copied</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -349,13 +403,62 @@ function showResult(d) {
   $('m_model').textContent  = d.model;
   $('m_method').textContent = (d.grid && d.grid.on_grid) ? 'Direct table value (on grid)' : 'Trilinear interpolation';
   $('m_source').textContent = d.citation || '—';
+  $('copyBtn').hidden = false;
 }
 
 function clearResult() {
   $('u1').textContent = '—'; $('u1').classList.add('placeholder-dash');
   $('u2').textContent = '—'; $('u2').classList.add('placeholder-dash');
   ['m_filter','m_model','m_method','m_source'].forEach(id => $(id).textContent = '—');
+  $('copyBtn').hidden = true;
 }
+
+// Copy LDCs to clipboard. The format is: "u1   u2" (three spaces between)
+// which gives clean visual separation when pasted into plain text contexts
+// such as observing notes or transit-fitting code comments.
+const COPY_FEEDBACK_MS = 1400;
+
+function showCopyToast(message, isError) {
+  const toast = $('copyToast');
+  toast.textContent = message;
+  toast.style.background = isError ? '#a94442' : '#1d7a3e';
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), COPY_FEEDBACK_MS);
+}
+
+$('copyBtn').addEventListener('click', async () => {
+  const btn = $('copyBtn');
+  const label = $('copyBtnLabel');
+  const u1Text = $('u1').textContent.trim();
+  const u2Text = $('u2').textContent.trim();
+  if (u1Text === '—' || u2Text === '—') return;
+  const text = u1Text + '   ' + u2Text;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // Fallback for older browsers without the modern clipboard API.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (!ok) throw new Error('execCommand copy failed');
+    }
+    btn.classList.add('copied-feedback');
+    label.textContent = 'Copied';
+    showCopyToast('Copied: ' + text, false);
+    setTimeout(() => {
+      btn.classList.remove('copied-feedback');
+      label.textContent = 'Copy';
+    }, COPY_FEEDBACK_MS);
+  } catch (e) {
+    showCopyToast('Copy failed: ' + e.message, true);
+  }
+});
 
 $('exampleBtn').addEventListener('click', () => {
   // Sun-like star in Kepler/ATLAS.
