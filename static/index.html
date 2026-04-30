@@ -391,7 +391,7 @@ form.addEventListener('submit', async (ev) => {
 });
 
 function fmt(x) {
-  return (x >= 0 ? '+' : '') + x.toFixed(4);
+  return x.toFixed(4);
 }
 
 function showResult(d) {
@@ -450,7 +450,6 @@ $('copyBtn').addEventListener('click', async () => {
     }
     btn.classList.add('copied-feedback');
     label.textContent = 'Copied';
-    showCopyToast('Copied: ' + text, false);
     setTimeout(() => {
       btn.classList.remove('copied-feedback');
       label.textContent = 'Copy';
