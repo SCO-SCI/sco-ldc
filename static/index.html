@@ -381,7 +381,8 @@ form.addEventListener('submit', async (ev) => {
     statusEl.classList.remove('text-danger', 'text-muted');
     statusEl.classList.add('text-success');
   } catch (e) {
-    statusEl.textContent = 'Error: ' + e.message;
+    statusEl.textContent = e.message;
+	/* statusEl.textContent = 'Error: ' + e.message; */
     statusEl.classList.remove('text-success', 'text-muted');
     statusEl.classList.add('text-danger');
     clearResult();
