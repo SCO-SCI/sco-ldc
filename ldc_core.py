@@ -548,13 +548,35 @@ def compute_ldcs(teff: float, logg: float, feh: float,
     try:
         i0, i1, tT = _bracket(teffs, float(teff))
     except ValueError as e:
-        raise ValueError(f"T_eff {teff} K outside grid [{teffs[0]}, {teffs[-1]}] for "
-                         f"{filter_code}/{_display_model(filter_code, storage_model)}") from e
+        model_name = _display_model(filter_code, storage_model)
+        if float(teff) < teffs[0]:
+            raise ValueError(
+                f"Invalid Input (Teff = {teff} K): "
+                f"The {model_name} model does not support values of Teff "
+                f"below {teffs[0]:.0f} K."
+            ) from e
+        else:
+            raise ValueError(
+                f"Invalid Input (Teff = {teff} K): "
+                f"The {model_name} model does not support values of Teff "
+                f"above {teffs[-1]:.0f} K."
+            ) from e
     try:
         j0, j1, tG = _bracket(loggs, float(logg))
     except ValueError as e:
-        raise ValueError(f"log g {logg} outside grid [{loggs[0]}, {loggs[-1]}] for "
-                         f"{filter_code}/{_display_model(filter_code, storage_model)}") from e
+        model_name = _display_model(filter_code, storage_model)
+        if float(logg) < loggs[0]:
+            raise ValueError(
+                f"Invalid Input (log g = {logg}): "
+                f"The {model_name} model does not support values of log g "
+                f"below {loggs[0]:.1f}."
+            ) from e
+        else:
+            raise ValueError(
+                f"Invalid Input (log g = {logg}): "
+                f"The {model_name} model does not support values of log g "
+                f"above {loggs[-1]:.1f}."
+            ) from e
     # [Fe/H] is degenerate for TESS and for CB2011 PHOENIX. If the user
     # submits something other than the single available Z, this will snap to it
     # (with a 1e-6 tolerance) rather than error out, because the UI may
@@ -572,8 +594,19 @@ def compute_ldcs(teff: float, logg: float, feh: float,
         try:
             k0, k1, tZ = _bracket(fehs, float(feh))
         except ValueError as e:
-            raise ValueError(f"[Fe/H] {feh} outside grid [{fehs[0]}, {fehs[-1]}] for "
-                             f"{filter_code}/{_display_model(filter_code, storage_model)}") from e
+            model_name = _display_model(filter_code, storage_model)
+            if float(feh) < fehs[0]:
+                raise ValueError(
+                    f"Invalid Input ([Fe/H] = {feh}): "
+                    f"The {model_name} model does not support values of [Fe/H] "
+                    f"below {fehs[0]:+.1f}."
+                ) from e
+            else:
+                raise ValueError(
+                    f"Invalid Input ([Fe/H] = {feh}): "
+                    f"The {model_name} model does not support values of [Fe/H] "
+                    f"above {fehs[-1]:+.1f}."
+                ) from e
 
     teff_vals = (teffs[i0], teffs[i1])
     logg_vals = (loggs[j0], loggs[j1])
@@ -582,10 +615,12 @@ def compute_ldcs(teff: float, logg: float, feh: float,
     corners = _nearest_available(data, teff_vals, logg_vals, feh_vals)  # type: ignore[arg-type]
     if corners is None:
         # Inside the nominal axis ranges but the ATLAS grid has a gap here.
+        model_name = _display_model(filter_code, storage_model)
         raise ValueError(
-            f"grid point missing for T_eff={teff}, log g={logg}, [Fe/H]={feh} "
-            f"in {filter_code}/{_display_model(filter_code, storage_model)}; "
-            f"Claret's table does not cover this corner of parameter space")
+            f"Invalid Input: Tables do not include data for this combination of "
+            f"Teff = {teff}, log g = {logg}, and [Fe/H] = {feh} "
+            f"with the {model_name} model."
+        )
 
     cube, _, _, _ = corners
 
