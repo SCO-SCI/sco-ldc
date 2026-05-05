@@ -550,34 +550,36 @@ def compute_ldcs(teff: float, logg: float, feh: float,
     except ValueError as e:
         model_name = _display_model(filter_code, storage_model)
         if float(teff) < teffs[0]:
+            suggestion = " Use the PHOENIX model instead." if storage_model == "ATLAS" and filter_code != "TESS" else ""
             raise ValueError(
                 f"Invalid Input (Teff = {teff} K): "
                 f"The {model_name} model does not support values of Teff "
-                f"below {teffs[0]:.0f} K.  "
-                f"Use the PHOENIX model instead."
+                f"below {teffs[0]:.0f} K.{suggestion}"
             ) from e
         else:
+            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and filter_code != "TESS" else ""
             raise ValueError(
                 f"Invalid Input (Teff = {teff} K): "
                 f"The {model_name} model does not support values of Teff "
-                f"above {teffs[-1]:.0f} K."
+                f"above {teffs[-1]:.0f} K.{suggestion}"
             ) from e
     try:
         j0, j1, tG = _bracket(loggs, float(logg))
     except ValueError as e:
         model_name = _display_model(filter_code, storage_model)
         if float(logg) < loggs[0]:
+            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and filter_code != "TESS" else ""
             raise ValueError(
                 f"Invalid Input (log g = {logg}): "
                 f"The {model_name} model does not support values of log g "
-                f"below {loggs[0]:.1f}."
+                f"below {loggs[0]:.1f}.{suggestion}"
             ) from e
         else:
             raise ValueError(
                 f"Invalid Input (log g = {logg}): "
                 f"The {model_name} model does not support values of log g "
                 f"above {loggs[-1]:.1f}."
-            ) from e
+            ) from e            
     # [Fe/H] is degenerate for TESS and for CB2011 PHOENIX. If the user
     # submits something other than the single available Z, this will snap to it
     # (with a 1e-6 tolerance) rather than error out, because the UI may
