@@ -137,7 +137,8 @@
     <div class="col-md-6">
       <h2 class="mb-2">Inputs</h2>
 
-      <form id="form" autocomplete="off">
+	  
+	  <form id="form" autocomplete="off" novalidate>      
 
         <div class="mb-3">
           <label for="teff" class="form-label">
@@ -365,10 +366,29 @@ function setBusy(on, msg) {
     submitBtn.innerHTML = 'Compute LDCs';
   }
 }
-
+  
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   if (!currentFilter || !currentModelEntry) return;
+
+  // Check for missing required fields
+  const required = [
+    { id: 'teff', label: 'T_eff' },
+    { id: 'logg', label: 'log(g)' },
+    { id: 'feh',  label: '[Fe/H]' },
+  ];
+  const missing = required.filter(f => !$(f.id).value.trim());
+  if (missing.length > 0) {
+    const labels = missing.map(f => f.label).join(', ');
+    statusEl.textContent = missing.length === 1
+      ? `Please fill in the ${labels} field.`
+      : `Please fill in these fields: ${labels}.`;
+    statusEl.classList.remove('text-success', 'text-muted');
+    statusEl.classList.add('text-danger');
+    $(missing[0].id).focus();
+    clearResult();
+    return;
+  }
 
   const params = new URLSearchParams({
     teff:   $('teff').value,
