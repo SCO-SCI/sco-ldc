@@ -107,6 +107,10 @@
     display: none;
   }
   
+  #status.text-danger {
+  font-weight: 600;
+  }
+  
 </style>
 </head>
 
@@ -444,8 +448,7 @@ function clearResult() {
 }
 
 // Copy LDCs to clipboard. The format is: "u1   u2" (three spaces between)
-// which gives clean visual separation when pasted into plain text contexts
-// such as observing notes or transit-fitting code comments.
+
 const COPY_FEEDBACK_MS = 1400;
 
 function showCopyToast(message, isError) {
