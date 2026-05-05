@@ -553,7 +553,8 @@ def compute_ldcs(teff: float, logg: float, feh: float,
             raise ValueError(
                 f"Invalid Input (Teff = {teff} K): "
                 f"The {model_name} model does not support values of Teff "
-                f"below {teffs[0]:.0f} K."
+                f"below {teffs[0]:.0f} K.  "
+                f"Use the PHOENIX model instead."
             ) from e
         else:
             raise ValueError(
