@@ -5,6 +5,8 @@ Endpoints:
   GET /api/health              - liveness + load summary
   GET /api/filters             - available filters with per-model grid ranges
   GET /api/compute             - compute (u1, u2) by trilinear interpolation
+  GET /api/resolve             - resolve a planet name to stellar parameters
+                                 from the NASA Exoplanet Archive
   GET /                        - serves static/index.html
 
 Run locally:  uvicorn app:app --reload --port 8000
@@ -22,6 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import ldc_core
+import nea_resolver
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -84,6 +87,24 @@ def compute(
         # Validation / out-of-range / missing-grid-point: 400.
         raise HTTPException(status_code=400, detail=str(e))
     return result
+
+
+@app.get("/api/resolve")
+def resolve(
+    planet: str = Query(..., description="Exoplanet name (e.g. 'WASP-23 b')"),
+) -> dict:
+    """
+    Resolve an exoplanet name to its host-star stellar parameters by
+    querying the NASA Exoplanet Archive Composite Parameters table.
+
+    Phase 1: NEA lookup only. ExoFOP fallback and "did you mean"
+    suggestions are deferred to later phases.
+
+    The endpoint always returns 200 with a JSON body describing the
+    outcome, including the "found" boolean. Callers should branch on
+    that field rather than relying on HTTP status.
+    """
+    return nea_resolver.query_nea(planet)
 
 
 # --- Static frontend -------------------------------------------------------
