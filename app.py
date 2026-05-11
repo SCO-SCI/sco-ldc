@@ -5,8 +5,8 @@ Endpoints:
   GET /api/health              - liveness + load summary
   GET /api/filters             - available filters with per-model grid ranges
   GET /api/compute             - compute (u1, u2) by trilinear interpolation
-  GET /api/resolve             - resolve a planet name to stellar parameters
-                                 from the NASA Exoplanet Archive
+  GET /api/resolve             - resolve a planet name or TOI identifier to
+                                 stellar parameters from NEA or ExoFOP-TESS
   GET /                        - serves static/index.html
 
 Run locally:  uvicorn app:app --reload --port 8000
@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 import ldc_core
 import nea_resolver
+import exofop_resolver
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -91,20 +92,40 @@ def compute(
 
 @app.get("/api/resolve")
 def resolve(
-    planet: str = Query(..., description="Exoplanet name (e.g. 'WASP-23 b')"),
+    planet: str = Query(..., description="Exoplanet name (e.g. 'WASP-23 b') or TOI identifier (e.g. 'TOI-1234.01')"),
 ) -> dict:
     """
-    Resolve an exoplanet name to its host-star stellar parameters by
-    querying the NASA Exoplanet Archive Composite Parameters table.
+    Resolve an exoplanet name or TOI identifier to host-star stellar
+    parameters.
 
-    Phase 1: NEA lookup only. ExoFOP fallback and "did you mean"
-    suggestions are deferred to later phases.
+    Routing logic:
+      1. Query NEA PSCompPars. If found, return NEA result.
+      2. If not found in NEA AND the input looks like a TOI identifier,
+         fall through to ExoFOP-TESS.
+      3. If neither source has it (or input is not a TOI and NEA had
+         nothing), return the final "not found" result.
 
     The endpoint always returns 200 with a JSON body describing the
-    outcome, including the "found" boolean. Callers should branch on
-    that field rather than relying on HTTP status.
+    outcome. Callers should branch on the "found" field rather than
+    relying on HTTP status codes.
     """
-    return nea_resolver.query_nea(planet)
+    nea_result = nea_resolver.query_nea(planet)
+
+    # NEA had it, or NEA errored. Either way, return what NEA gave us.
+    # An NEA error is more informative than silently trying ExoFOP.
+    if nea_result.get("found") is True:
+        return nea_result
+    if nea_result.get("reason") == "error":
+        return nea_result
+
+    # NEA returned "not_in_nea". Try ExoFOP only if the input looks
+    # like a TOI identifier - for planet names like "WASP-23 b",
+    # ExoFOP can't help and the call would just waste time.
+    if exofop_resolver.looks_like_toi(planet):
+        return exofop_resolver.query_exofop(planet)
+
+    # Not in NEA and not a TOI. Final "not found".
+    return nea_result
 
 
 # --- Static frontend -------------------------------------------------------
