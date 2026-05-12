@@ -88,7 +88,7 @@ def query_nea(planet_name: str) -> dict:
 
 _namelist_lock = threading.Lock()
 _namelist: list[str] = []
-_namelist_lower: list[str] = []
+_lower_to_canonical: dict[str, str] = {}
 _namelist_loaded_utc_date: Optional[str] = None  # ISO YYYY-MM-DD or None
 
 
@@ -110,7 +110,6 @@ def load_namelist_at_startup(fallback_path: Optional[str] = None) -> dict:
         try:
             names = _load_namelist_from_file(fallback_path)
             if names:
-                
                 _set_namelist(names, load_date=None)
                 return {"source": "fallback", "count": len(names)}
         except Exception:
@@ -123,11 +122,9 @@ def maybe_refresh_namelist() -> None:
     
     today = _utc_today_iso()
 
-    
     if _namelist_loaded_utc_date == today:
         return
 
-    
     with _namelist_lock:
         if _namelist_loaded_utc_date == today:
             return
@@ -137,36 +134,36 @@ def maybe_refresh_namelist() -> None:
             if names:
                 _set_namelist_locked(names, load_date=today)
         except Exception:
-           
             pass
 
 
+def canonicalize_name(name: str) -> Optional[str]:
+    
+    if not _lower_to_canonical:
+        return None
+    return _lower_to_canonical.get(name.lower())
+
+
 def get_suggestions(query: str) -> list[str]:
-   
-    if not _namelist:
+    
+    if not _lower_to_canonical:
         return []
 
     query_lower = query.lower()
 
     
     with _namelist_lock:
-        lower_snapshot = list(_namelist_lower)
-        canonical_snapshot = list(_namelist)
+        lower_keys = list(_lower_to_canonical.keys())
+        lower_to_canon = dict(_lower_to_canonical)
 
     lower_matches = difflib.get_close_matches(
         query_lower,
-        lower_snapshot,
+        lower_keys,
         n=SUGGESTION_LIMIT,
         cutoff=SUGGESTION_CUTOFF,
     )
 
-    
-    lower_to_canonical: dict[str, str] = {}
-    for canon, lower in zip(canonical_snapshot, lower_snapshot):
-        if lower not in lower_to_canonical:
-            lower_to_canonical[lower] = canon
-
-    return [lower_to_canonical[m] for m in lower_matches if m in lower_to_canonical]
+    return [lower_to_canon[m] for m in lower_matches if m in lower_to_canon]
 
 
 def namelist_status() -> dict:
@@ -188,14 +185,19 @@ def _set_namelist(names: list[str], load_date: Optional[str]) -> None:
 
 def _set_namelist_locked(names: list[str], load_date: Optional[str]) -> None:
     
-    global _namelist, _namelist_lower, _namelist_loaded_utc_date
+    global _namelist, _lower_to_canonical, _namelist_loaded_utc_date
     _namelist = list(names)
-    _namelist_lower = [n.lower() for n in names]
+    new_dict: dict[str, str] = {}
+    for n in names:
+        lower = n.lower()
+        if lower not in new_dict:
+            new_dict[lower] = n
+    _lower_to_canonical = new_dict
     _namelist_loaded_utc_date = load_date
 
 
 def _fetch_namelist_from_nea() -> list[str]:
-    
+   
     adql = "select pl_name from pscomppars"
     params = {"query": adql, "format": "json"}
 
@@ -222,7 +224,7 @@ def _fetch_namelist_from_nea() -> list[str]:
 
 
 def _load_namelist_from_file(path: str) -> list[str]:
-    
+   
     names: set[str] = set()
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
@@ -236,7 +238,7 @@ def _load_namelist_from_file(path: str) -> list[str]:
 
 
 def _utc_today_iso() -> str:
-   
+    
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 

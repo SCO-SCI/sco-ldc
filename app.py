@@ -28,6 +28,7 @@ app = FastAPI(
     version="3.0.0",
 )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,7 +36,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 LOAD_COUNTS = ldc_core.load_tables(DATA_DIR)
+
 
 NAMELIST_STATUS = nea_resolver.load_namelist_at_startup(
     fallback_path=NEA_FALLBACK_PATH,
@@ -49,6 +52,7 @@ logger.info(
 
 @app.get("/api/health")
 def health() -> dict:
+    
     return {
         "status": "ok",
         "version": app.version,
@@ -60,6 +64,7 @@ def health() -> dict:
 
 @app.get("/api/filters")
 def filters() -> dict:
+    
     return {"filters": ldc_core.get_available_filters()}
 
 
@@ -71,6 +76,7 @@ def compute(
     filter: str = Query(..., alias="filter", description="Filter code (e.g. 'V', 'Kp', 'TESS', 'CBB')"),
     model:  str = Query("ATLAS", description="Stellar atmosphere model: ATLAS, PHOENIX, or PHOENIX-COND"),
 ) -> dict:
+    
     try:
         result = ldc_core.compute_ldcs(teff, logg, feh, filter, model)
     except ValueError as e:
@@ -82,23 +88,28 @@ def compute(
 def resolve(
     planet: str = Query(..., description="Exoplanet name (e.g. 'WASP-23 b') or TOI identifier (e.g. 'TOI-1234.01')"),
 ) -> dict:
+    
     nea_resolver.maybe_refresh_namelist()
 
-    nea_result = nea_resolver.query_nea(planet)
-
     
+    canonical = nea_resolver.canonicalize_name(planet)
+    query_name = canonical if canonical is not None else planet
+
+    nea_result = nea_resolver.query_nea(query_name)
+
     if nea_result.get("found") is True:
         return nea_result
 
     if nea_result.get("reason") == "error":
         return nea_result
 
-    
+   
     if exofop_resolver.looks_like_toi(planet):
         exofop_result = exofop_resolver.query_exofop(planet)
         if exofop_result.get("found") is True:
             return exofop_result
-        
+
+    
     nea_result["suggestions"] = nea_resolver.get_suggestions(planet)
     return nea_result
 
@@ -111,7 +122,7 @@ if os.path.isdir(STATIC_DIR):
 
 @app.get("/")
 def root():
-    
+    """Serve the single-page frontend."""
     index_path = os.path.join(STATIC_DIR, "index.html")
     if not os.path.exists(index_path):
         return JSONResponse(
