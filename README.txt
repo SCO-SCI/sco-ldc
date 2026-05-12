@@ -1,4 +1,4 @@
-scoldc v3
+sco-ldc v3
 =========
 
 Quadratic limb-darkening coefficients (u1, u2) for exoplanet transit

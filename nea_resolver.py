@@ -1,98 +1,43 @@
-"""
-NEA resolver - queries the NASA Exoplanet Archive Planetary Systems
-Composite Parameters table (PSCompPars, DOI: 10.26133/NEA13) for
-stellar parameters by planet name.
-
-Phase 1: bare NEA lookup. No ExoFOP fallback, no fuzzy match, no
-name normalization. Those come in later phases.
-
-The NEA TAP (Table Access Protocol) endpoint accepts ADQL-like SQL
-over HTTPS GET and returns JSON. Documentation:
-  https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html
-"""
-
 from __future__ import annotations
 
+import difflib
+import os
+import threading
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
 
 
-# Public NEA TAP sync endpoint. No auth required.
+
 NEA_TAP_URL = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
 
-# Citation string we return alongside successful lookups so the
-# frontend can display attribution to the user.
+
 NEA_CITATION = "DOI: 10.26133/NEA13"
 
-# Hard timeout (seconds) for the HTTPS call. NEA is usually fast
-# (well under a second) but we don't want a hung request to tie up
-# a worker for minutes. 10s is generous; tune later if needed.
+
 NEA_TIMEOUT_SECONDS = 10.0
 
 
+NEA_NAMELIST_TIMEOUT_SECONDS = 60.0
+
+
+SUGGESTION_CUTOFF = 0.7
+SUGGESTION_LIMIT = 3
+
+
+
+
+
 def query_nea(planet_name: str) -> dict:
-    """
-    Query NEA PSCompPars for a single planet by exact name match.
-
-    Returns a dict in one of three shapes:
-
-    Found:
-        {
-            "found": True,
-            "planet": "WASP-23 b",
-            "hostname": "WASP-23",
-            "teff": 5150.0,
-            "logg": 4.4,
-            "feh": -0.05,
-            "source": "NEA",
-            "citation": "DOI: 10.26133/NEA13",
-        }
-        Any of teff / logg / feh may be None if the NEA value is null.
-
-    Not found (no matching row in PSCompPars):
-        {
-            "found": False,
-            "planet": "WASP-23 b",
-            "reason": "not_in_nea",
-        }
-
-    Error (network failure, malformed response, NEA returned an error):
-        {
-            "found": False,
-            "planet": "WASP-23 b",
-            "reason": "error",
-            "error": "<short human-readable description>",
-        }
-
-    The function never raises; all failure modes return a dict so the
-    caller can render the response without exception handling.
-    """
-    # ADQL query selecting just the fields we need from PSCompPars,
-    # filtered by exact pl_name match.
-    #
-    # PSCompPars has one row per confirmed planet, so an exact name
-    # match returns at most one row. We use parameterized-style
-    # quoting on the planet name to avoid breaking the URL if the
-    # name contains spaces or special characters - httpx handles the
-    # URL-encoding.
-    #
-    # Columns:
-    #   pl_name   - planet name (e.g. "WASP-23 b")
-    #   hostname  - host star name (e.g. "WASP-23")
-    #   st_teff   - effective temperature in K
-    #   st_logg   - surface gravity log g in cgs dex
-    #   st_met    - metallicity [Fe/H] in dex
+    
     adql = (
         "select pl_name, hostname, st_teff, st_logg, st_met "
         "from pscomppars "
         f"where pl_name = '{planet_name}'"
     )
 
-    params = {
-        "query": adql,
-        "format": "json",
-    }
+    params = {"query": adql, "format": "json"}
 
     try:
         response = httpx.get(
@@ -111,8 +56,6 @@ def query_nea(planet_name: str) -> dict:
     except httpx.RequestError as exc:
         return _error_response(planet_name, f"NEA request failed: {exc}")
 
-    # NEA returns JSON as a list of dicts, one per row. Empty list
-    # means no match.
     try:
         rows = response.json()
     except ValueError:
@@ -128,12 +71,7 @@ def query_nea(planet_name: str) -> dict:
             "reason": "not_in_nea",
         }
 
-    # PSCompPars has one row per planet, so we take the first (and
-    # only expected) row. If NEA ever returns more than one, we still
-    # use the first - this would be a data anomaly worth flagging,
-    # but it's not our problem to solve here.
     row = rows[0]
-
     return {
         "found": True,
         "planet": row.get("pl_name", planet_name),
@@ -146,13 +84,164 @@ def query_nea(planet_name: str) -> dict:
     }
 
 
+
+
+_namelist_lock = threading.Lock()
+_namelist: list[str] = []
+_namelist_lower: list[str] = []
+_namelist_loaded_utc_date: Optional[str] = None  # ISO YYYY-MM-DD or None
+
+
+def load_namelist_at_startup(fallback_path: Optional[str] = None) -> dict:
+    
+    today = _utc_today_iso()
+
+    
+    try:
+        names = _fetch_namelist_from_nea()
+        if names:
+            _set_namelist(names, load_date=today)
+            return {"source": "nea", "count": len(names)}
+    except Exception:
+        pass
+
+    
+    if fallback_path and os.path.exists(fallback_path):
+        try:
+            names = _load_namelist_from_file(fallback_path)
+            if names:
+                
+                _set_namelist(names, load_date=None)
+                return {"source": "fallback", "count": len(names)}
+        except Exception:
+            pass
+
+    return {"source": "empty", "count": 0}
+
+
+def maybe_refresh_namelist() -> None:
+    
+    today = _utc_today_iso()
+
+    
+    if _namelist_loaded_utc_date == today:
+        return
+
+    
+    with _namelist_lock:
+        if _namelist_loaded_utc_date == today:
+            return
+
+        try:
+            names = _fetch_namelist_from_nea()
+            if names:
+                _set_namelist_locked(names, load_date=today)
+        except Exception:
+           
+            pass
+
+
+def get_suggestions(query: str) -> list[str]:
+   
+    if not _namelist:
+        return []
+
+    query_lower = query.lower()
+
+    
+    with _namelist_lock:
+        lower_snapshot = list(_namelist_lower)
+        canonical_snapshot = list(_namelist)
+
+    lower_matches = difflib.get_close_matches(
+        query_lower,
+        lower_snapshot,
+        n=SUGGESTION_LIMIT,
+        cutoff=SUGGESTION_CUTOFF,
+    )
+
+    
+    lower_to_canonical: dict[str, str] = {}
+    for canon, lower in zip(canonical_snapshot, lower_snapshot):
+        if lower not in lower_to_canonical:
+            lower_to_canonical[lower] = canon
+
+    return [lower_to_canonical[m] for m in lower_matches if m in lower_to_canonical]
+
+
+def namelist_status() -> dict:
+    
+    return {
+        "count": len(_namelist),
+        "loaded_utc_date": _namelist_loaded_utc_date,
+    }
+
+
+
+
+
+def _set_namelist(names: list[str], load_date: Optional[str]) -> None:
+    
+    with _namelist_lock:
+        _set_namelist_locked(names, load_date)
+
+
+def _set_namelist_locked(names: list[str], load_date: Optional[str]) -> None:
+    
+    global _namelist, _namelist_lower, _namelist_loaded_utc_date
+    _namelist = list(names)
+    _namelist_lower = [n.lower() for n in names]
+    _namelist_loaded_utc_date = load_date
+
+
+def _fetch_namelist_from_nea() -> list[str]:
+    
+    adql = "select pl_name from pscomppars"
+    params = {"query": adql, "format": "json"}
+
+    response = httpx.get(
+        NEA_TAP_URL,
+        params=params,
+        timeout=NEA_NAMELIST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    rows = response.json()
+
+    if not isinstance(rows, list):
+        raise ValueError("Unexpected JSON shape from NEA")
+
+    names: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("pl_name")
+        if isinstance(name, str) and name.strip():
+            names.add(name.strip())
+
+    return sorted(names)
+
+
+def _load_namelist_from_file(path: str) -> list[str]:
+    
+    names: set[str] = set()
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("#"):
+                continue
+            names.add(stripped)
+    return sorted(names)
+
+
+def _utc_today_iso() -> str:
+   
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
 def _coerce_float(value) -> Optional[float]:
-    """
-    Convert an NEA-returned value to a float, or None if it's null
-    or unparseable. NEA's JSON typically returns numbers as numbers
-    and missing values as null (JSON null -> Python None), but we
-    defend against string-numeric values too.
-    """
+    
     if value is None:
         return None
     try:
