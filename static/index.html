@@ -105,7 +105,11 @@
   ::-webkit-validation-bubble-icon,
   ::-moz-validation-bubble-icon {
     display: none;
-  }  
+  }
+  
+  #status.text-danger {
+  font-weight: 500;
+  }
 
   /* Planet-name lookup area */
   .planet-row {
@@ -818,6 +822,18 @@ async function doLookup() {
         : data.source || 'unknown');
   const citationDetail = data.citation ? `, ${data.citation}` : '';
   addLookupLine(`Source: ${sourceLabel}${citationDetail}`, 'text-muted');
+
+  // ATLAS does not support Teff below 3500 K. For cool stars, suggest
+  // the user switch to PHOENIX (which goes down to ~2300 K). Only show
+  // the hint when the lookup actually returned a Teff value below the
+  // threshold AND the current model is ATLAS - if the user is already
+  // on PHOENIX, the hint would be redundant.
+  if (typeof data.teff === 'number' && data.teff < 3500 && $('model').value === 'ATLAS') {
+    addLookupLine(
+      'Note: The ATLAS model does not support Teff below 3500 K. Switch to PHOENIX model.',
+      'text-muted',
+    );
+  }
 }
 
 // Populate a single parameter field from a lookup response value.
