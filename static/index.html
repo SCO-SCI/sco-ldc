@@ -762,14 +762,42 @@ async function doLookup() {
   }
 
   // Found - canonical name replaces user input, parameters populate,
-  // per-parameter missing messages shown for any nulls, and the source
-  // citation is displayed inline.
+  // a summary line shows what was found vs. not found for any nulls,
+  // and the source citation is displayed inline.
   if (data.planet) {
     $('planetName').value = data.planet;
   }
-  populateParameter('teff', data.teff, 'T_eff', data.planet);
-  populateParameter('logg', data.logg, 'log(g)', data.planet);
-  populateParameter('feh',  data.feh,  '[Fe/H]', data.planet);
+
+  // Populate each field (silently) and track which parameters came back
+  // with a real number vs. came back null/missing. [Fe/H] is excluded
+  // from both lists when the field is disabled (filter-locked to solar),
+  // because the user can't see or use that value anyway - whether the
+  // lookup supplied it is irrelevant in that case.
+  const foundLabels = [];
+  const missingLabels = [];
+
+  populateParameterValue('teff', data.teff);
+  if (typeof data.teff === 'number') {
+    foundLabels.push('Teff');
+  } else {
+    missingLabels.push('Teff');
+  }
+
+  populateParameterValue('logg', data.logg);
+  if (typeof data.logg === 'number') {
+    foundLabels.push('log(g)');
+  } else {
+    missingLabels.push('log(g)');
+  }
+
+  populateParameterValue('feh', data.feh);
+  if (!$('feh').disabled) {
+    if (typeof data.feh === 'number') {
+      foundLabels.push('[Fe/H]');
+    } else {
+      missingLabels.push('[Fe/H]');
+    }
+  }
 
   // Record the baseline so Compute LDCs can later check whether the
   // current field values still match what the lookup supplied.
@@ -780,27 +808,57 @@ async function doLookup() {
     feh:  (typeof data.feh  === 'number') ? data.feh  : null,
   };
 
+  // Build one summary line if anything was missing. When all parameters
+  // are present (or all relevant ones are - i.e. [Fe/H] disabled and
+  // the other two found), say nothing about found/missing.
+  const summary = buildFoundSummary(foundLabels, missingLabels, data.planet);
+  if (summary) addLookupLine(summary, 'text-muted');
+
+  // Source citation. Format: "Source: {name}, {citation}".
   const sourceLabel = data.source === 'NEA'
     ? 'NASA Exoplanet Archive Composite Parameters'
     : (data.source === 'ExoFOP'
         ? 'ExoFOP-TESS'
         : data.source || 'unknown');
-  const citationText = data.citation ? ` (${data.citation})` : '';
-  addLookupLine(`Parameter source: ${sourceLabel}${citationText}`, 'text-muted');
+  const citationDetail = data.citation ? `, ${data.citation}` : '';
+  addLookupLine(`Source: ${sourceLabel}${citationDetail}`, 'text-muted');
 }
 
 // Populate a single parameter field from a lookup response value.
-// If the value is null/undefined, leave the field blank and show a
-// "not found" message so the user knows the field was deliberately
-// not populated.
-function populateParameter(fieldId, value, label, planetName) {
+// If the value is null/undefined, leave the field blank (subject to
+// the disabled check, so filter-locked [Fe/H] stays at its forced
+// value). This function no longer emits messages - the caller builds
+// a single found/missing summary line for the whole lookup.
+function populateParameterValue(fieldId, value) {
   const el = $(fieldId);
   if (value === null || value === undefined) {
     if (!el.disabled) el.value = '';
-    addLookupLine(`${label} for ${planetName} not found.`, 'text-muted');
   } else {
     if (!el.disabled) el.value = value;
   }
+}
+
+// Format a list of labels as a natural-language phrase:
+//   ['Teff']                  -> 'Teff'
+//   ['Teff', 'log(g)']        -> 'Teff, log(g)'
+//   ['Teff', 'log(g)', '[Fe/H]'] -> 'Teff, log(g), [Fe/H]'
+// We deliberately use commas throughout rather than Oxford-comma + 'and',
+// because the parameter labels themselves can contain punctuation
+// (the slashes in [Fe/H], parens in log(g)) and an extra 'and' would
+// add noise without improving clarity.
+function joinLabels(labels) {
+  return labels.join(', ');
+}
+
+// Compose the found/missing summary line. Returns a string or null:
+//   - null if there are no missing parameters (caller skips the line)
+//   - "<found> found. <missing> not found for X." if some of each
+//   - "<missing> not found for X." if none were found
+function buildFoundSummary(foundLabels, missingLabels, planetName) {
+  if (missingLabels.length === 0) return null;
+  const missingPhrase = `${joinLabels(missingLabels)} not found for ${planetName}.`;
+  if (foundLabels.length === 0) return missingPhrase;
+  return `${joinLabels(foundLabels)} found. ${missingPhrase}`;
 }
 
 lookupBtn.addEventListener('click', doLookup);
