@@ -110,6 +110,39 @@
   #status.text-danger {
   font-weight: 500;
   }
+
+  /* Planet-name lookup area */
+  .planet-row {
+    display: flex;
+    gap: 0.4rem;
+    align-items: stretch;
+  }
+  .planet-row .form-control { flex: 1; }
+  #lookupBtn {
+    white-space: nowrap;
+    background-color: #5474a5;
+    border-color: #5474a5;
+    color: #fff;
+  }
+  #lookupBtn:hover {
+    background-color: #001745;
+    border-color: #001745;
+    color: #fff;
+  }
+  #lookupBtn:disabled {
+    background-color: #adb5bd;
+    border-color: #adb5bd;
+    color: #fff;
+  }
+  /* Suggestion links inside the lookup status area */
+  #lookupStatus .suggestion-link {
+    color: #001f5b;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  #lookupStatus .suggestion-link:hover { color: #001745; }
+  #lookupStatus .lookup-line { margin-bottom: 0.1rem; }
+  #lookupStatus.text-danger { font-weight: 500; }
   
 </style>
 </head>
@@ -143,6 +176,18 @@
 
 	  
 	  <form id="form" autocomplete="off" novalidate>      
+
+        <!-- Exoplanet name lookup (optional shortcut for filling Teff/logg/[Fe/H]) -->
+        <div class="mb-3">
+          <label for="planetName" class="form-label">
+            Exoplanet name<span class="hint">e.g. WASP-23 b or TOI-700.01</span>
+          </label>
+          <div class="planet-row">
+            <input type="text" class="form-control" id="planetName" name="planetName" placeholder="Enter planet name or TOI...">
+            <button type="button" class="btn btn-primary" id="lookupBtn">Look up</button>
+          </div>
+          <div id="lookupStatus" class="mt-1 small"></div>
+        </div>
 
         <div class="mb-3">
           <label for="teff" class="form-label">
@@ -268,6 +313,8 @@ const $ = (id) => document.getElementById(id);
 const form = $('form');
 const submitBtn = $('submitBtn');
 const statusEl = $('status');
+const lookupBtn = $('lookupBtn');
+const lookupStatusEl = $('lookupStatus');
 
 // State shared between filter/model/hint handlers
 let FILTERS = [];
@@ -510,10 +557,148 @@ $('clearBtn').addEventListener('click', () => {
   $('teff').value = '';
   $('logg').value = '';
   if (!$('feh').disabled) $('feh').value = '';
+  $('planetName').value = '';
+  clearLookupStatus();
   clearResult();
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success');
   statusEl.classList.add('text-muted');
+});
+
+
+
+function clearLookupStatus() {
+  lookupStatusEl.innerHTML = '';
+  lookupStatusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+}
+
+function setLookupBusy(on) {
+  lookupBtn.disabled = on;
+  if (on) {
+    lookupBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Looking up…';
+  } else {
+    lookupBtn.innerHTML = 'Look up';
+  }
+}
+
+
+function makeSuggestionLink(name) {
+  const a = document.createElement('a');
+  a.href = '#';
+  a.className = 'suggestion-link';
+  a.textContent = name;
+  a.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    $('planetName').value = name;
+    doLookup();
+  });
+  return a;
+}
+
+
+function renderSuggestions(suggestions) {
+  if (!suggestions || suggestions.length === 0) return null;
+  const wrap = document.createElement('span');
+  wrap.appendChild(document.createTextNode('Did you mean '));
+  suggestions.forEach((name, i) => {
+    wrap.appendChild(makeSuggestionLink(name));
+    if (i < suggestions.length - 2) {
+      wrap.appendChild(document.createTextNode(', '));
+    } else if (i === suggestions.length - 2) {
+      wrap.appendChild(document.createTextNode(suggestions.length === 2 ? ' or ' : ', or '));
+    }
+  });
+  wrap.appendChild(document.createTextNode('?'));
+  return wrap;
+}
+
+function addLookupLine(text, className) {
+  const div = document.createElement('div');
+  div.className = 'lookup-line';
+  if (className) div.classList.add(className);
+  if (typeof text === 'string') {
+    div.textContent = text;
+  } else {
+    div.appendChild(text);
+  }
+  lookupStatusEl.appendChild(div);
+}
+
+async function doLookup() {
+  const planet = $('planetName').value.trim();
+  if (!planet) {
+    clearLookupStatus();
+    addLookupLine('Enter a planet name or TOI to look up.', 'text-muted');
+    return;
+  }
+
+  clearLookupStatus();
+  setLookupBusy(true);
+
+  let data;
+  try {
+    const resp = await fetch('/api/resolve?planet=' + encodeURIComponent(planet));
+    data = await resp.json();
+  } catch (e) {
+    addLookupLine('Lookup failed: ' + e.message, 'text-danger');
+    setLookupBusy(false);
+    return;
+  } finally {
+    setLookupBusy(false);
+  }
+
+  // Error path (network/source-side failure)
+  if (data.reason === 'error') {
+    addLookupLine('Lookup error: ' + (data.error || 'unknown error'), 'text-danger');
+    return;
+  }
+
+  // Not-found path
+  if (data.found !== true) {
+    addLookupLine(`Name: ${planet} not found.`, 'text-danger');
+    const sugg = renderSuggestions(data.suggestions);
+    if (sugg) addLookupLine(sugg, 'text-muted');
+    return;
+  }
+
+
+  if (data.planet) {
+    $('planetName').value = data.planet;
+  }
+  populateParameter('teff', data.teff, 'T_eff', data.planet);
+  populateParameter('logg', data.logg, 'log(g)', data.planet);
+  populateParameter('feh',  data.feh,  '[Fe/H]', data.planet);
+
+  const sourceLabel = data.source === 'NEA'
+    ? 'NASA Exoplanet Archive Composite Parameters'
+    : (data.source === 'ExoFOP'
+        ? 'ExoFOP-TESS'
+        : data.source || 'unknown');
+  const citationText = data.citation ? ` (${data.citation})` : '';
+  addLookupLine(`Parameter source: ${sourceLabel}${citationText}`, 'text-muted');
+}
+
+
+function populateParameter(fieldId, value, label, planetName) {
+  const el = $(fieldId);
+  if (value === null || value === undefined) {
+    // Don't blank out a [Fe/H] field that is locked-to-solar by the
+    // current filter/model combination (e.g. TESS PHOENIX-COND).
+    if (!el.disabled) el.value = '';
+    addLookupLine(`${label} for ${planetName} not found.`, 'text-muted');
+  } else {
+    if (!el.disabled) el.value = value;
+  }
+}
+
+lookupBtn.addEventListener('click', doLookup);
+
+
+$('planetName').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') {
+    ev.preventDefault();
+    doLookup();
+  }
 });
 </script>
 
