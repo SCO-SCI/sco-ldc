@@ -321,6 +321,25 @@ let FILTERS = [];
 let currentFilter = null;
 let currentModelEntry = null;
 
+// Lookup baseline: the parameter values most recently populated by a
+// successful planet-name lookup. Used at Compute-LDCs time to decide
+// whether the planet name in the input field still faithfully describes
+// what we're about to compute - if the user has edited any of the
+// numeric fields, the baseline no longer matches and the planet name
+// gets cleared to avoid screenshots being misinterpreted as attributing
+// the computed LDCs to the wrong planet.
+//
+// Set to null when there is no current lookup baseline (no successful
+// lookup yet, or the user changed it). A baseline entry of null for a
+// specific parameter means the lookup did not supply that parameter
+// (e.g., ExoFOP returned no [Fe/H]).
+let lookupBaseline = null;
+
+// Float tolerance for comparing field values to the baseline. Field
+// values are stored as strings and may have trailing zeros etc.; we
+// parse both sides to floats and use a small epsilon.
+const PARAM_EQ_EPSILON = 1e-9;
+
 async function loadFilters() {
   try {
     const resp = await fetch('/api/filters');
@@ -417,7 +436,46 @@ function setBusy(on, msg) {
     submitBtn.innerHTML = 'Compute LDCs';
   }
 }
-  
+
+// Compare a current field value to a baseline value with float tolerance.
+// Returns true if the values are equivalent (treating both as numbers).
+// A baseline of null/undefined means "the lookup didn't supply this
+// parameter" - in that case any user-entered value counts as a divergence
+// from the baseline, because the user provided info the lookup didn't.
+function fieldMatchesBaseline(fieldValue, baselineValue) {
+  if (baselineValue === null || baselineValue === undefined) {
+    // No baseline value to match. If the field is empty too, that's
+    // a kind of "match" but it would mean the user submitted with an
+    // empty field - which the compute path rejects anyway. Treat as
+    // a divergence so the planet name gets cleared.
+    return false;
+  }
+  const cur = parseFloat(fieldValue);
+  if (isNaN(cur)) return false;
+  return Math.abs(cur - baselineValue) < PARAM_EQ_EPSILON;
+}
+
+// Check whether the current Teff/log(g)/[Fe/H] fields all match the
+// current lookup baseline. If there is no baseline, returns false.
+// Disabled [Fe/H] (e.g., TESS filter forcing solar) doesn't disqualify
+// the planet name - the user didn't choose that value, the filter did.
+function paramsMatchBaseline() {
+  if (lookupBaseline === null) return false;
+
+  if (!fieldMatchesBaseline($('teff').value, lookupBaseline.teff)) return false;
+  if (!fieldMatchesBaseline($('logg').value, lookupBaseline.logg)) return false;
+
+  // For [Fe/H], skip the check entirely if the field is disabled
+  // (filter-locked to solar). The lookup may have supplied a different
+  // [Fe/H] but the filter constraint overrode it; the user didn't make
+  // a contradictory choice.
+  if (!$('feh').disabled) {
+    if (!fieldMatchesBaseline($('feh').value, lookupBaseline.feh)) return false;
+  }
+
+  return true;
+}
+
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   if (!currentFilter || !currentModelEntry) return;
@@ -439,6 +497,17 @@ form.addEventListener('submit', async (ev) => {
     $(missing[0].id).focus();
     clearResult();
     return;
+  }
+
+  // If the user's current numeric inputs no longer faithfully match the
+  // planet that was looked up, clear the planet name field so a screenshot
+  // of the resulting LDCs cannot be misread as attributing the parameters
+  // to that planet. Filter and model changes are NOT a trigger here -
+  // the planet's identity is unchanged by which bandpass we compute for.
+  if (!paramsMatchBaseline()) {
+    $('planetName').value = '';
+    clearLookupStatus();
+    lookupBaseline = null;
   }
 
   const params = new URLSearchParams({
@@ -548,6 +617,9 @@ $('exampleBtn').addEventListener('click', () => {
   $('teff').value = 5778;
   $('logg').value = 4.44;
   if (!$('feh').disabled) $('feh').value = 0.0;
+  $('planetName').value = '';
+  clearLookupStatus();
+  lookupBaseline = null;
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success');
   statusEl.classList.add('text-muted');
@@ -559,17 +631,33 @@ $('clearBtn').addEventListener('click', () => {
   if (!$('feh').disabled) $('feh').value = '';
   $('planetName').value = '';
   clearLookupStatus();
+  lookupBaseline = null;
   clearResult();
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success');
   statusEl.classList.add('text-muted');
 });
 
-
+// --- Exoplanet name lookup -----------------------------------------------
+// Calls the /api/resolve endpoint, populates the Teff/log(g)/[Fe/H] fields,
+// and shows source citation + per-parameter messages or "did you mean"
+// suggestions. The user can edit any populated value before submitting;
+// /api/compute uses whatever is currently in the fields.
 
 function clearLookupStatus() {
   lookupStatusEl.innerHTML = '';
   lookupStatusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+}
+
+// Blank out the three parameter fields ahead of a fresh lookup so the
+// user never sees a previous planet's values sitting in the form while
+// a new lookup is in progress. A disabled [Fe/H] (filter-locked to solar)
+// is preserved - the user didn't choose that value, the filter did, and
+// the lookup wouldn't be allowed to overwrite it either.
+function clearParameterFieldsForLookup() {
+  $('teff').value = '';
+  $('logg').value = '';
+  if (!$('feh').disabled) $('feh').value = '';
 }
 
 function setLookupBusy(on) {
@@ -581,7 +669,8 @@ function setLookupBusy(on) {
   }
 }
 
-
+// Build a small inline element for a "did you mean" suggestion that the
+// user can click to populate the input field and immediately retry.
 function makeSuggestionLink(name) {
   const a = document.createElement('a');
   a.href = '#';
@@ -595,7 +684,8 @@ function makeSuggestionLink(name) {
   return a;
 }
 
-
+// Format the suggestions list as "Did you mean A, B, or C?" with each
+// name being a clickable link.
 function renderSuggestions(suggestions) {
   if (!suggestions || suggestions.length === 0) return null;
   const wrap = document.createElement('span');
@@ -632,7 +722,17 @@ async function doLookup() {
     return;
   }
 
+  // Every lookup starts from a clean slate: parameter fields blank,
+  // results blank, status messages blank, baseline cleared. This way
+  // the user never sees a previous lookup's data while a new lookup
+  // is running, regardless of whether the new one succeeds.
   clearLookupStatus();
+  clearParameterFieldsForLookup();
+  clearResult();
+  lookupBaseline = null;
+  statusEl.textContent = '';
+  statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+
   setLookupBusy(true);
 
   let data;
@@ -661,13 +761,24 @@ async function doLookup() {
     return;
   }
 
-
+  // Found - canonical name replaces user input, parameters populate,
+  // per-parameter missing messages shown for any nulls, and the source
+  // citation is displayed inline.
   if (data.planet) {
     $('planetName').value = data.planet;
   }
   populateParameter('teff', data.teff, 'T_eff', data.planet);
   populateParameter('logg', data.logg, 'log(g)', data.planet);
   populateParameter('feh',  data.feh,  '[Fe/H]', data.planet);
+
+  // Record the baseline so Compute LDCs can later check whether the
+  // current field values still match what the lookup supplied.
+  lookupBaseline = {
+    planet: data.planet,
+    teff: (typeof data.teff === 'number') ? data.teff : null,
+    logg: (typeof data.logg === 'number') ? data.logg : null,
+    feh:  (typeof data.feh  === 'number') ? data.feh  : null,
+  };
 
   const sourceLabel = data.source === 'NEA'
     ? 'NASA Exoplanet Archive Composite Parameters'
@@ -678,12 +789,13 @@ async function doLookup() {
   addLookupLine(`Parameter source: ${sourceLabel}${citationText}`, 'text-muted');
 }
 
-
+// Populate a single parameter field from a lookup response value.
+// If the value is null/undefined, leave the field blank and show a
+// "not found" message so the user knows the field was deliberately
+// not populated.
 function populateParameter(fieldId, value, label, planetName) {
   const el = $(fieldId);
   if (value === null || value === undefined) {
-    // Don't blank out a [Fe/H] field that is locked-to-solar by the
-    // current filter/model combination (e.g. TESS PHOENIX-COND).
     if (!el.disabled) el.value = '';
     addLookupLine(`${label} for ${planetName} not found.`, 'text-muted');
   } else {
@@ -693,7 +805,8 @@ function populateParameter(fieldId, value, label, planetName) {
 
 lookupBtn.addEventListener('click', doLookup);
 
-
+// Enter in the planet-name field also triggers lookup (and prevents the
+// form from being submitted, which would otherwise try to compute LDCs).
 $('planetName').addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter') {
     ev.preventDefault();
