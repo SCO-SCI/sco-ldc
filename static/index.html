@@ -42,6 +42,7 @@
   .table-sm td { padding: 0.2rem 0.35rem; font-size: 0.75rem; }
   .table-sm, .table-sm td { border-color: #4c555d; }
   hr { margin: 0.75rem 0; }
+  hr.hr-double { margin: 0.3rem 0; opacity: 1; border-top: 1px solid #b0b0b0; }
   .mb-3 { margin-bottom: 0.5rem !important; }
   .container.py-3 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
 
@@ -184,6 +185,9 @@
           </div>
           <div id="lookupStatus" class="mt-1 small"></div>
         </div>
+
+        <hr class="hr-double">
+        <hr class="hr-double">
 
         <div class="mb-3">
           <label for="teff" class="form-label">
@@ -775,7 +779,12 @@ async function doLookup() {
     );
   }
 
-  
+  // PHOENIX model checks. Only fire when the model dropdown is exactly
+  // 'PHOENIX' (not 'PHOENIX-COND', which has its own grid limits and is
+  // typically filter-locked via TESS). Each check is independent and
+  // only runs if the lookup actually returned a numeric value for that
+  // parameter. [Fe/H] uses a small tolerance so values that round to
+  // solar within published precision (e.g. -0.03) don't trigger.
   if ($('model').value === 'PHOENIX') {
     if (typeof data.teff === 'number' && data.teff > 9800) {
       addLookupLine(
