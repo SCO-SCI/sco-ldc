@@ -774,6 +774,28 @@ async function doLookup() {
       'text-muted',
     );
   }
+
+  
+  if ($('model').value === 'PHOENIX') {
+    if (typeof data.teff === 'number' && data.teff > 9800) {
+      addLookupLine(
+        'Note: The PHOENIX model does not support Teff above 9800 K. Switch to ATLAS model.',
+        'text-muted',
+      );
+    }
+    if (typeof data.logg === 'number' && data.logg < 3.5) {
+      addLookupLine(
+        'Note: The PHOENIX model does not support Log(g) below 3.5. Switch to ATLAS model.',
+        'text-muted',
+      );
+    }
+    if (typeof data.feh === 'number' && Math.abs(data.feh) >= 0.05) {
+      addLookupLine(
+        'Note: The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model.',
+        'text-muted',
+      );
+    }
+  }
 }
 
 
