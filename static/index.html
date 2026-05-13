@@ -167,14 +167,14 @@
 
   <div class="row g-3">
 
-    <!-- INPUTS -->
+    
     <div class="col-md-6">
       <h2 class="mb-2">Inputs</h2>
 
 	  
 	  <form id="form" autocomplete="off" novalidate>      
 
-        <!-- Exoplanet name lookup (optional shortcut for filling Teff/logg/[Fe/H]) -->
+        
         <div class="mb-3">
           <label for="planetName" class="form-label">
             Exoplanet name<span class="hint">e.g. WASP-23 b or TOI-700.01</span>
@@ -230,7 +230,7 @@
       </form>
     </div>
 
-    <!-- RESULTS -->
+    
     <div class="col-md-6">
       <h2 class="mb-2">
         Results
@@ -268,7 +268,7 @@
 
   </div>
 
-  </div><!-- /.top-section -->
+  </div>
 
   <hr>
 
@@ -304,7 +304,7 @@
 
 </div>
 
-<!-- Toast for clipboard-copy feedback -->
+
 <div class="copy-toast" id="copyToast" role="status" aria-live="polite">Copyied</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -316,7 +316,7 @@ const statusEl = $('status');
 const lookupBtn = $('lookupBtn');
 const lookupStatusEl = $('lookupStatus');
 
-// State shared between filter/model/hint handlers
+
 let FILTERS = [];
 let currentFilter = null;
 let currentModelEntry = null;
@@ -336,7 +336,7 @@ async function loadFilters() {
     const sel = $('filter');
     sel.innerHTML = '';
 
-    // Group by category, preserving registry order.
+    
     const groups = new Map();
     for (const f of FILTERS) {
       if (!groups.has(f.category)) groups.set(f.category, []);
@@ -356,7 +356,7 @@ async function loadFilters() {
       sel.appendChild(og);
     }
 
-    // Default: Kepler (Kp) for a sun-like example.
+    
     sel.value = FILTERS.some(f => f.code === 'Kp') ? 'Kp' : FILTERS[0].code;
 
     sel.addEventListener('change', onFilterChange);
@@ -372,7 +372,7 @@ loadFilters();
 function onFilterChange() {
   currentFilter = FILTERS.find(f => f.code === $('filter').value);
   if (!currentFilter) return;
-  // Populate the model dropdown with this filter's available models.
+  
   const mSel = $('model');
   mSel.innerHTML = '';
   const models = [...currentFilter.models].sort((a, b) => {
@@ -556,7 +556,7 @@ $('copyBtn').addEventListener('click', async () => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
     } else {
-      // Fallback for older browsers without the modern clipboard API.
+      
       const ta = document.createElement('textarea');
       ta.value = text;
       ta.style.position = 'fixed';
@@ -579,7 +579,7 @@ $('copyBtn').addEventListener('click', async () => {
 });
 
 $('exampleBtn').addEventListener('click', () => {
-  // Sun-like star in Kepler/ATLAS.
+  
   $('filter').value = 'Kp';
   onFilterChange();
   $('model').value = 'ATLAS';
@@ -704,13 +704,13 @@ async function doLookup() {
     setLookupBusy(false);
   }
 
-  // Error path (network/source-side failure)
+ 
   if (data.reason === 'error') {
     addLookupLine('Lookup error: ' + (data.error || 'unknown error'), 'text-danger');
     return;
   }
 
-  // Not-found path
+  
   if (data.found !== true) {
     addLookupLine(`Name: ${planet} not found.`, 'text-danger');
     const sugg = renderSuggestions(data.suggestions);
@@ -762,7 +762,7 @@ async function doLookup() {
   const summary = buildFoundSummary(foundLabels, missingLabels, data.planet);
   if (summary) addLookupLine(summary, 'text-muted');
 
-  // Source citation. Format: "Source: {name}, {citation}".
+  
   const sourceLabel = data.source === 'NEA'
     ? 'NASA Exoplanet Archive Composite Parameters'
     : (data.source === 'ExoFOP'
@@ -779,12 +779,7 @@ async function doLookup() {
     );
   }
 
-  // PHOENIX model checks. Only fire when the model dropdown is exactly
-  // 'PHOENIX' (not 'PHOENIX-COND', which has its own grid limits and is
-  // typically filter-locked via TESS). Each check is independent and
-  // only runs if the lookup actually returned a numeric value for that
-  // parameter. [Fe/H] uses a small tolerance so values that round to
-  // solar within published precision (e.g. -0.03) don't trigger.
+  
   if ($('model').value === 'PHOENIX') {
     if (typeof data.teff === 'number' && data.teff > 9800) {
       addLookupLine(

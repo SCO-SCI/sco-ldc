@@ -39,8 +39,7 @@ _COL_FEH = "Stellar Metallicity"
 
 _cache_lock = threading.Lock()
 _cache: dict[str, dict] = {}
-_loaded_utc_date: Optional[str] = None  # ISO YYYY-MM-DD or None
-
+_last_successful_live_refresh_utc: Optional[datetime] = None
 
 
 
@@ -139,12 +138,10 @@ def _live_single_lookup(toi_input: str, host_toi: int, canonical_toi: str) -> di
 
 def load_cache_at_startup(fallback_path: Optional[str] = None) -> dict:
     
-    today = _utc_today_iso()
-
     try:
         rows = _fetch_full_table_from_exofop()
         if rows:
-            _set_cache(rows, load_date=today)
+            _set_cache(rows, refresh_time=datetime.now(timezone.utc))
             return {"source": "exofop", "count": len(rows)}
     except Exception:
         pass
@@ -153,7 +150,7 @@ def load_cache_at_startup(fallback_path: Optional[str] = None) -> dict:
         try:
             rows = _load_table_from_file(fallback_path)
             if rows:
-                _set_cache(rows, load_date=None)
+                _set_cache(rows, refresh_time=None)
                 return {"source": "fallback", "count": len(rows)}
         except Exception:
             pass
@@ -161,28 +158,24 @@ def load_cache_at_startup(fallback_path: Optional[str] = None) -> dict:
     return {"source": "empty", "count": 0}
 
 
-def maybe_refresh_cache() -> None:
+def refresh_cache_from_live() -> bool:
     
-    today = _utc_today_iso()
-    if _loaded_utc_date == today:
-        return
-
-    with _cache_lock:
-        if _loaded_utc_date == today:
-            return
-        try:
-            rows = _fetch_full_table_from_exofop()
-            if rows:
-                _set_cache_locked(rows, load_date=today)
-        except Exception:
-            pass
+    try:
+        rows = _fetch_full_table_from_exofop()
+    except Exception:
+        return False
+    if not rows:
+        return False
+    _set_cache(rows, refresh_time=datetime.now(timezone.utc))
+    return True
 
 
 def cache_status() -> dict:
     
     return {
         "count": len(_cache),
-        "loaded_utc_date": _loaded_utc_date,
+        "refreshed_utc": _last_successful_live_refresh_utc.strftime("%Y-%m-%d %H:%M UTC")
+            if _last_successful_live_refresh_utc is not None else None,
     }
 
 
@@ -190,7 +183,7 @@ def cache_status() -> dict:
 
 
 def _fetch_full_table_from_exofop() -> list[dict]:
-   
+    
     params = {"sort": "toi", "output": "pipe"}
     response = httpx.get(
         EXOFOP_TOI_URL,
@@ -267,7 +260,7 @@ def _load_table_from_file(path: str) -> list[dict]:
 
 
 def _parse_cell(cell: str):
-    """TSV cell -> float, or None if empty/unparseable."""
+    
     s = cell.strip()
     if s == "":
         return None
@@ -277,15 +270,15 @@ def _parse_cell(cell: str):
         return None
 
 
-def _set_cache(rows: list[dict], load_date: Optional[str]) -> None:
+def _set_cache(rows: list[dict], refresh_time: Optional[datetime]) -> None:
     
     with _cache_lock:
-        _set_cache_locked(rows, load_date)
+        _set_cache_locked(rows, refresh_time)
 
 
-def _set_cache_locked(rows: list[dict], load_date: Optional[str]) -> None:
-   
-    global _cache, _loaded_utc_date
+def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> None:
+    
+    global _cache, _last_successful_live_refresh_utc
     new_cache: dict[str, dict] = {}
     for row in rows:
         toi = row.get("toi")
@@ -294,11 +287,8 @@ def _set_cache_locked(rows: list[dict], load_date: Optional[str]) -> None:
         if toi not in new_cache:
             new_cache[toi] = row
     _cache = new_cache
-    _loaded_utc_date = load_date
-
-
-def _utc_today_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if refresh_time is not None:
+        _last_successful_live_refresh_utc = refresh_time
 
 
 def _to_float_or_none(value):

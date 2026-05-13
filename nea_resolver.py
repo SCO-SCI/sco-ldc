@@ -34,7 +34,7 @@ NEA_COLUMNS = ["pl_name", "hostname", "st_teff", "st_logg", "st_met"]
 _cache_lock = threading.Lock()
 _cache: dict[str, dict] = {}
 _lower_keys: list[str] = []
-_loaded_utc_date: Optional[str] = None  # ISO YYYY-MM-DD or None
+_last_successful_live_refresh_utc: Optional[datetime] = None
 
 
 
@@ -59,7 +59,7 @@ def query_nea(planet_name: str) -> dict:
 
 
 def _row_to_response(row: dict) -> dict:
-   
+    
     return {
         "found": True,
         "planet": row.get("pl_name"),
@@ -73,7 +73,7 @@ def _row_to_response(row: dict) -> dict:
 
 
 def _live_single_lookup(planet_name: str) -> dict:
-   
+    
     adql = (
         f"select {', '.join(NEA_COLUMNS)} from pscomppars "
         f"where pl_name = '{planet_name}'"
@@ -103,7 +103,7 @@ def _live_single_lookup(planet_name: str) -> dict:
 
 
 def canonicalize_name(name: str) -> Optional[str]:
-   
+    
     if not name or not _cache:
         return None
     row = _cache.get(name.lower())
@@ -116,7 +116,7 @@ def get_suggestions(query: str) -> list[str]:
         return []
     query_lower = query.lower()
 
-   
+    
     with _cache_lock:
         keys_snapshot = list(_lower_keys)
         cache_snapshot = dict(_cache)
@@ -132,12 +132,10 @@ def get_suggestions(query: str) -> list[str]:
 
 def load_cache_at_startup(fallback_path: Optional[str] = None) -> dict:
     
-    today = _utc_today_iso()
-
     try:
         rows = _fetch_full_table_from_nea()
         if rows:
-            _set_cache(rows, load_date=today)
+            _set_cache(rows, refresh_time=datetime.now(timezone.utc))
             return {"source": "nea", "count": len(rows)}
     except Exception:
         pass
@@ -147,7 +145,7 @@ def load_cache_at_startup(fallback_path: Optional[str] = None) -> dict:
             rows = _load_table_from_file(fallback_path)
             if rows:
                 
-                _set_cache(rows, load_date=None)
+                _set_cache(rows, refresh_time=None)
                 return {"source": "fallback", "count": len(rows)}
         except Exception:
             pass
@@ -155,32 +153,24 @@ def load_cache_at_startup(fallback_path: Optional[str] = None) -> dict:
     return {"source": "empty", "count": 0}
 
 
-def maybe_refresh_cache() -> None:
+def refresh_cache_from_live() -> bool:
     
-    today = _utc_today_iso()
-
-   
-    if _loaded_utc_date == today:
-        return
-
-    
-    with _cache_lock:
-        if _loaded_utc_date == today:
-            return
-        try:
-            rows = _fetch_full_table_from_nea()
-            if rows:
-                _set_cache_locked(rows, load_date=today)
-        except Exception:
-          
-            pass
+    try:
+        rows = _fetch_full_table_from_nea()
+    except Exception:
+        return False
+    if not rows:
+        return False
+    _set_cache(rows, refresh_time=datetime.now(timezone.utc))
+    return True
 
 
 def cache_status() -> dict:
     
     return {
         "count": len(_cache),
-        "loaded_utc_date": _loaded_utc_date,
+        "refreshed_utc": _last_successful_live_refresh_utc.strftime("%Y-%m-%d %H:%M UTC")
+            if _last_successful_live_refresh_utc is not None else None,
     }
 
 
@@ -188,7 +178,7 @@ def cache_status() -> dict:
 
 
 def _fetch_full_table_from_nea() -> list[dict]:
-   
+    
     adql = f"select {', '.join(NEA_COLUMNS)} from pscomppars"
     params = {"query": adql, "format": "json"}
 
@@ -255,15 +245,15 @@ def _parse_cell(cell: str):
         return None
 
 
-def _set_cache(rows: list[dict], load_date: Optional[str]) -> None:
+def _set_cache(rows: list[dict], refresh_time: Optional[datetime]) -> None:
     
     with _cache_lock:
-        _set_cache_locked(rows, load_date)
+        _set_cache_locked(rows, refresh_time)
 
 
-def _set_cache_locked(rows: list[dict], load_date: Optional[str]) -> None:
+def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> None:
     
-    global _cache, _lower_keys, _loaded_utc_date
+    global _cache, _lower_keys, _last_successful_live_refresh_utc
     new_cache: dict[str, dict] = {}
     for row in rows:
         name = row.get("pl_name")
@@ -274,16 +264,12 @@ def _set_cache_locked(rows: list[dict], load_date: Optional[str]) -> None:
             new_cache[key] = row
     _cache = new_cache
     _lower_keys = list(new_cache.keys())
-    _loaded_utc_date = load_date
-
-
-def _utc_today_iso() -> str:
-   
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if refresh_time is not None:
+        _last_successful_live_refresh_utc = refresh_time
 
 
 def _to_float_or_none(value):
-  
+    
     if value is None:
         return None
     try:
