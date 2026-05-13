@@ -16,14 +16,25 @@ NEA_TAP_URL = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
 NEA_CITATION = "DOI: 10.26133/NEA13"
 
 
-NEA_TIMEOUT_SECONDS = 10.0
+NEA_BULK_TIMEOUT_SECONDS = 60.0
 
 
-NEA_NAMELIST_TIMEOUT_SECONDS = 60.0
+NEA_LIVE_TIMEOUT_SECONDS = 10.0
 
 
 SUGGESTION_CUTOFF = 0.7
 SUGGESTION_LIMIT = 3
+
+
+NEA_COLUMNS = ["pl_name", "hostname", "st_teff", "st_logg", "st_met"]
+
+
+
+
+_cache_lock = threading.Lock()
+_cache: dict[str, dict] = {}
+_lower_keys: list[str] = []
+_loaded_utc_date: Optional[str] = None  # ISO YYYY-MM-DD or None
 
 
 
@@ -31,180 +42,158 @@ SUGGESTION_LIMIT = 3
 
 def query_nea(planet_name: str) -> dict:
     
-    adql = (
-        "select pl_name, hostname, st_teff, st_logg, st_met "
-        "from pscomppars "
-        f"where pl_name = '{planet_name}'"
-    )
+    if not planet_name:
+        return {"found": False, "planet": planet_name, "reason": "not_in_nea"}
 
-    params = {"query": adql, "format": "json"}
+    
+    row = _cache.get(planet_name.lower())
+    if row is not None:
+        return _row_to_response(row)
 
-    try:
-        response = httpx.get(
-            NEA_TAP_URL,
-            params=params,
-            timeout=NEA_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-    except httpx.TimeoutException:
-        return _error_response(planet_name, "NEA query timed out")
-    except httpx.HTTPStatusError as exc:
-        return _error_response(
-            planet_name,
-            f"NEA returned HTTP {exc.response.status_code}",
-        )
-    except httpx.RequestError as exc:
-        return _error_response(planet_name, f"NEA request failed: {exc}")
+    
+    if _cache:
+        return {"found": False, "planet": planet_name, "reason": "not_in_nea"}
 
-    try:
-        rows = response.json()
-    except ValueError:
-        return _error_response(planet_name, "NEA returned non-JSON response")
+    
+    return _live_single_lookup(planet_name)
 
-    if not isinstance(rows, list):
-        return _error_response(planet_name, "NEA returned unexpected JSON shape")
 
-    if len(rows) == 0:
-        return {
-            "found": False,
-            "planet": planet_name,
-            "reason": "not_in_nea",
-        }
-
-    row = rows[0]
+def _row_to_response(row: dict) -> dict:
+   
     return {
         "found": True,
-        "planet": row.get("pl_name", planet_name),
+        "planet": row.get("pl_name"),
         "hostname": row.get("hostname"),
-        "teff": _coerce_float(row.get("st_teff")),
-        "logg": _coerce_float(row.get("st_logg")),
-        "feh":  _coerce_float(row.get("st_met")),
+        "teff": _to_float_or_none(row.get("st_teff")),
+        "logg": _to_float_or_none(row.get("st_logg")),
+        "feh":  _to_float_or_none(row.get("st_met")),
         "source": "NEA",
         "citation": NEA_CITATION,
     }
 
 
+def _live_single_lookup(planet_name: str) -> dict:
+   
+    adql = (
+        f"select {', '.join(NEA_COLUMNS)} from pscomppars "
+        f"where pl_name = '{planet_name}'"
+    )
+    params = {"query": adql, "format": "json"}
+
+    try:
+        response = httpx.get(
+            NEA_TAP_URL, params=params, timeout=NEA_LIVE_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except httpx.TimeoutException:
+        return _error_response(planet_name, "NEA query timed out")
+    except httpx.HTTPStatusError as exc:
+        return _error_response(planet_name, f"NEA returned HTTP {exc.response.status_code}")
+    except (httpx.RequestError, ValueError) as exc:
+        return _error_response(planet_name, f"NEA request failed: {exc}")
+
+    if not isinstance(rows, list) or len(rows) == 0:
+        return {"found": False, "planet": planet_name, "reason": "not_in_nea"}
+
+    return _row_to_response(rows[0])
 
 
-_namelist_lock = threading.Lock()
-_namelist: list[str] = []
-_lower_to_canonical: dict[str, str] = {}
-_namelist_loaded_utc_date: Optional[str] = None  # ISO YYYY-MM-DD or None
 
 
-def load_namelist_at_startup(fallback_path: Optional[str] = None) -> dict:
+
+def canonicalize_name(name: str) -> Optional[str]:
+   
+    if not name or not _cache:
+        return None
+    row = _cache.get(name.lower())
+    return row.get("pl_name") if row else None
+
+
+def get_suggestions(query: str) -> list[str]:
+    
+    if not _cache or not query:
+        return []
+    query_lower = query.lower()
+
+   
+    with _cache_lock:
+        keys_snapshot = list(_lower_keys)
+        cache_snapshot = dict(_cache)
+
+    lower_matches = difflib.get_close_matches(
+        query_lower, keys_snapshot, n=SUGGESTION_LIMIT, cutoff=SUGGESTION_CUTOFF,
+    )
+    return [cache_snapshot[k]["pl_name"] for k in lower_matches if k in cache_snapshot]
+
+
+
+
+
+def load_cache_at_startup(fallback_path: Optional[str] = None) -> dict:
     
     today = _utc_today_iso()
 
-    
     try:
-        names = _fetch_namelist_from_nea()
-        if names:
-            _set_namelist(names, load_date=today)
-            return {"source": "nea", "count": len(names)}
+        rows = _fetch_full_table_from_nea()
+        if rows:
+            _set_cache(rows, load_date=today)
+            return {"source": "nea", "count": len(rows)}
     except Exception:
         pass
 
-    
     if fallback_path and os.path.exists(fallback_path):
         try:
-            names = _load_namelist_from_file(fallback_path)
-            if names:
-                _set_namelist(names, load_date=None)
-                return {"source": "fallback", "count": len(names)}
+            rows = _load_table_from_file(fallback_path)
+            if rows:
+                
+                _set_cache(rows, load_date=None)
+                return {"source": "fallback", "count": len(rows)}
         except Exception:
             pass
 
     return {"source": "empty", "count": 0}
 
 
-def maybe_refresh_namelist() -> None:
+def maybe_refresh_cache() -> None:
     
     today = _utc_today_iso()
 
-    if _namelist_loaded_utc_date == today:
+   
+    if _loaded_utc_date == today:
         return
 
-    with _namelist_lock:
-        if _namelist_loaded_utc_date == today:
+    
+    with _cache_lock:
+        if _loaded_utc_date == today:
             return
-
         try:
-            names = _fetch_namelist_from_nea()
-            if names:
-                _set_namelist_locked(names, load_date=today)
+            rows = _fetch_full_table_from_nea()
+            if rows:
+                _set_cache_locked(rows, load_date=today)
         except Exception:
+          
             pass
 
 
-def canonicalize_name(name: str) -> Optional[str]:
-    
-    if not _lower_to_canonical:
-        return None
-    return _lower_to_canonical.get(name.lower())
-
-
-def get_suggestions(query: str) -> list[str]:
-    
-    if not _lower_to_canonical:
-        return []
-
-    query_lower = query.lower()
-
-    
-    with _namelist_lock:
-        lower_keys = list(_lower_to_canonical.keys())
-        lower_to_canon = dict(_lower_to_canonical)
-
-    lower_matches = difflib.get_close_matches(
-        query_lower,
-        lower_keys,
-        n=SUGGESTION_LIMIT,
-        cutoff=SUGGESTION_CUTOFF,
-    )
-
-    return [lower_to_canon[m] for m in lower_matches if m in lower_to_canon]
-
-
-def namelist_status() -> dict:
+def cache_status() -> dict:
     
     return {
-        "count": len(_namelist),
-        "loaded_utc_date": _namelist_loaded_utc_date,
+        "count": len(_cache),
+        "loaded_utc_date": _loaded_utc_date,
     }
 
 
 
 
 
-def _set_namelist(names: list[str], load_date: Optional[str]) -> None:
-    
-    with _namelist_lock:
-        _set_namelist_locked(names, load_date)
-
-
-def _set_namelist_locked(names: list[str], load_date: Optional[str]) -> None:
-    
-    global _namelist, _lower_to_canonical, _namelist_loaded_utc_date
-    _namelist = list(names)
-    new_dict: dict[str, str] = {}
-    for n in names:
-        lower = n.lower()
-        if lower not in new_dict:
-            new_dict[lower] = n
-    _lower_to_canonical = new_dict
-    _namelist_loaded_utc_date = load_date
-
-
-def _fetch_namelist_from_nea() -> list[str]:
+def _fetch_full_table_from_nea() -> list[dict]:
    
-    adql = "select pl_name from pscomppars"
+    adql = f"select {', '.join(NEA_COLUMNS)} from pscomppars"
     params = {"query": adql, "format": "json"}
 
     response = httpx.get(
-        NEA_TAP_URL,
-        params=params,
-        timeout=NEA_NAMELIST_TIMEOUT_SECONDS,
+        NEA_TAP_URL, params=params, timeout=NEA_BULK_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     rows = response.json()
@@ -212,38 +201,89 @@ def _fetch_namelist_from_nea() -> list[str]:
     if not isinstance(rows, list):
         raise ValueError("Unexpected JSON shape from NEA")
 
-    names: set[str] = set()
+    
+    cleaned: list[dict] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
         name = row.get("pl_name")
-        if isinstance(name, str) and name.strip():
-            names.add(name.strip())
+        if not isinstance(name, str) or not name.strip():
+            continue
+        cleaned.append({
+            "pl_name": name.strip(),
+            "hostname": row.get("hostname"),
+            "st_teff": row.get("st_teff"),
+            "st_logg": row.get("st_logg"),
+            "st_met":  row.get("st_met"),
+        })
+    return cleaned
 
-    return sorted(names)
 
-
-def _load_namelist_from_file(path: str) -> list[str]:
-   
-    names: set[str] = set()
+def _load_table_from_file(path: str) -> list[dict]:
+    
+    rows: list[dict] = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             stripped = line.strip()
-            if not stripped:
+            if not stripped or stripped.startswith("#"):
                 continue
-            if stripped.startswith("#"):
+            parts = stripped.split("\t")
+            # Pad to 5 if any cells are missing at the end (TSV-trim).
+            while len(parts) < 5:
+                parts.append("")
+            name = parts[0].strip()
+            if not name:
                 continue
-            names.add(stripped)
-    return sorted(names)
+            rows.append({
+                "pl_name": name,
+                "hostname": parts[1].strip() or None,
+                "st_teff": _parse_cell(parts[2]),
+                "st_logg": _parse_cell(parts[3]),
+                "st_met":  _parse_cell(parts[4]),
+            })
+    return rows
+
+
+def _parse_cell(cell: str):
+    
+    s = cell.strip()
+    if s == "":
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _set_cache(rows: list[dict], load_date: Optional[str]) -> None:
+    
+    with _cache_lock:
+        _set_cache_locked(rows, load_date)
+
+
+def _set_cache_locked(rows: list[dict], load_date: Optional[str]) -> None:
+    
+    global _cache, _lower_keys, _loaded_utc_date
+    new_cache: dict[str, dict] = {}
+    for row in rows:
+        name = row.get("pl_name")
+        if not name:
+            continue
+        key = name.lower()
+        if key not in new_cache:
+            new_cache[key] = row
+    _cache = new_cache
+    _lower_keys = list(new_cache.keys())
+    _loaded_utc_date = load_date
 
 
 def _utc_today_iso() -> str:
-    
+   
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def _coerce_float(value) -> Optional[float]:
-    
+def _to_float_or_none(value):
+  
     if value is None:
         return None
     try:
