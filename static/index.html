@@ -42,6 +42,7 @@
   .table-sm td { padding: 0.2rem 0.35rem; font-size: 0.75rem; }
   .table-sm, .table-sm td { border-color: #4c555d; }
   hr { margin: 0.75rem 0; }
+  hr.hr-double { margin: 0.3rem 0; opacity: 1; border-top: 1px solid #b0b0b0; }
   .mb-3 { margin-bottom: 0.5rem !important; }
   .container.py-3 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
 
@@ -106,10 +107,39 @@
   ::-moz-validation-bubble-icon {
     display: none;
   }
-  
-  #status.text-danger {
-  font-weight: 500;
+    
+  /* Planet-name lookup area */
+  .planet-row {
+    display: flex;
+    gap: 0.4rem;
+    align-items: stretch;
   }
+  .planet-row .form-control { flex: 1; }
+  #lookupBtn {
+    white-space: nowrap;
+    background-color: #5474a5;
+    border-color: #5474a5;
+    color: #fff;
+  }
+  #lookupBtn:hover {
+    background-color: #001745;
+    border-color: #001745;
+    color: #fff;
+  }
+  #lookupBtn:disabled {
+    background-color: #adb5bd;
+    border-color: #adb5bd;
+    color: #fff;
+  }
+  /* Suggestion links inside the lookup status area */
+  #lookupStatus .suggestion-link {
+    color: #001f5b;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  #lookupStatus .suggestion-link:hover { color: #001745; }
+  #lookupStatus .lookup-line { margin-bottom: 0.1rem; }
+  #lookupStatus.text-danger { font-weight: 500; }
   
 </style>
 </head>
@@ -130,16 +160,32 @@
 
   
 
+
   <hr>
 
   <div class="row g-3">
 
-    <!-- INPUTS -->
+    
     <div class="col-md-6">
       <h2 class="mb-2">Inputs</h2>
 
 	  
 	  <form id="form" autocomplete="off" novalidate>      
+
+        
+        <div class="mb-3">
+          <label for="planetName" class="form-label">
+            Exoplanet name<span class="hint">e.g. WASP-23 b or TOI-700.01</span>
+          </label>
+          <div class="planet-row">
+            <input type="text" class="form-control" id="planetName" name="planetName" placeholder="Enter planet name or TOI...">
+            <button type="button" class="btn btn-primary" id="lookupBtn">Look up</button>
+          </div>
+          <div id="lookupStatus" class="mt-1 small"></div>
+        </div>
+
+        <hr class="hr-double">
+        <hr class="hr-double">
 
         <div class="mb-3">
           <label for="teff" class="form-label">
@@ -182,7 +228,7 @@
       </form>
     </div>
 
-    <!-- RESULTS -->
+    
     <div class="col-md-6">
       <h2 class="mb-2">
         Results
@@ -220,7 +266,7 @@
 
   </div>
 
-  </div><!-- /.top-section -->
+  </div>
 
   <hr>
 
@@ -256,7 +302,7 @@
 
 </div>
 
-<!-- Toast for clipboard-copy feedback -->
+
 <div class="copy-toast" id="copyToast" role="status" aria-live="polite">Copyied</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -265,11 +311,19 @@ const $ = (id) => document.getElementById(id);
 const form = $('form');
 const submitBtn = $('submitBtn');
 const statusEl = $('status');
+const lookupBtn = $('lookupBtn');
+const lookupStatusEl = $('lookupStatus');
 
-// State shared between filter/model/hint handlers
+
 let FILTERS = [];
 let currentFilter = null;
 let currentModelEntry = null;
+
+
+let lookupBaseline = null;
+
+
+const PARAM_EQ_EPSILON = 1e-9;
 
 async function loadFilters() {
   try {
@@ -280,7 +334,7 @@ async function loadFilters() {
     const sel = $('filter');
     sel.innerHTML = '';
 
-    // Group by category, preserving registry order.
+    
     const groups = new Map();
     for (const f of FILTERS) {
       if (!groups.has(f.category)) groups.set(f.category, []);
@@ -300,7 +354,7 @@ async function loadFilters() {
       sel.appendChild(og);
     }
 
-    // Default: Kepler (Kp) for a sun-like example.
+    
     sel.value = FILTERS.some(f => f.code === 'Kp') ? 'Kp' : FILTERS[0].code;
 
     sel.addEventListener('change', onFilterChange);
@@ -316,7 +370,7 @@ loadFilters();
 function onFilterChange() {
   currentFilter = FILTERS.find(f => f.code === $('filter').value);
   if (!currentFilter) return;
-  // Populate the model dropdown with this filter's available models.
+  
   const mSel = $('model');
   mSel.innerHTML = '';
   const models = [...currentFilter.models].sort((a, b) => {
@@ -367,7 +421,33 @@ function setBusy(on, msg) {
     submitBtn.innerHTML = 'Compute LDCs';
   }
 }
+
+
+function fieldMatchesBaseline(fieldValue, baselineValue) {
+  if (baselineValue === null || baselineValue === undefined) {
+   
+    return false;
+  }
+  const cur = parseFloat(fieldValue);
+  if (isNaN(cur)) return false;
+  return Math.abs(cur - baselineValue) < PARAM_EQ_EPSILON;
+}
+
+
+function paramsMatchBaseline() {
+  if (lookupBaseline === null) return false;
+
+  if (!fieldMatchesBaseline($('teff').value, lookupBaseline.teff)) return false;
+  if (!fieldMatchesBaseline($('logg').value, lookupBaseline.logg)) return false;
+
   
+  if (!$('feh').disabled) {
+    if (!fieldMatchesBaseline($('feh').value, lookupBaseline.feh)) return false;
+  }
+
+  return true;
+}
+
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   if (!currentFilter || !currentModelEntry) return;
@@ -389,6 +469,13 @@ form.addEventListener('submit', async (ev) => {
     $(missing[0].id).focus();
     clearResult();
     return;
+  }
+
+ 
+  if (!paramsMatchBaseline()) {
+    $('planetName').value = '';
+    clearLookupStatus();
+    lookupBaseline = null;
   }
 
   const params = new URLSearchParams({
@@ -444,7 +531,7 @@ function clearResult() {
   $('copyBtn').hidden = true;
 }
 
-// Copy LDCs to clipboard. The format is: "u1   u2" (three spaces between)
+
 
 const COPY_FEEDBACK_MS = 1400;
 
@@ -467,7 +554,7 @@ $('copyBtn').addEventListener('click', async () => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
     } else {
-      // Fallback for older browsers without the modern clipboard API.
+      
       const ta = document.createElement('textarea');
       ta.value = text;
       ta.style.position = 'fixed';
@@ -490,7 +577,7 @@ $('copyBtn').addEventListener('click', async () => {
 });
 
 $('exampleBtn').addEventListener('click', () => {
-  // Sun-like star in Kepler/ATLAS.
+  
   $('filter').value = 'Kp';
   onFilterChange();
   $('model').value = 'ATLAS';
@@ -498,6 +585,9 @@ $('exampleBtn').addEventListener('click', () => {
   $('teff').value = 5778;
   $('logg').value = 4.44;
   if (!$('feh').disabled) $('feh').value = 0.0;
+  $('planetName').value = '';
+  clearLookupStatus();
+  lookupBaseline = null;
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success');
   statusEl.classList.add('text-muted');
@@ -507,10 +597,240 @@ $('clearBtn').addEventListener('click', () => {
   $('teff').value = '';
   $('logg').value = '';
   if (!$('feh').disabled) $('feh').value = '';
+  $('planetName').value = '';
+  clearLookupStatus();
+  lookupBaseline = null;
   clearResult();
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success');
   statusEl.classList.add('text-muted');
+});
+
+
+
+function clearLookupStatus() {
+  lookupStatusEl.innerHTML = '';
+  lookupStatusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+}
+
+
+function clearParameterFieldsForLookup() {
+  $('teff').value = '';
+  $('logg').value = '';
+  if (!$('feh').disabled) $('feh').value = '';
+}
+
+function setLookupBusy(on) {
+  lookupBtn.disabled = on;
+  if (on) {
+    lookupBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Looking up…';
+  } else {
+    lookupBtn.innerHTML = 'Look up';
+  }
+}
+
+
+function makeSuggestionLink(name) {
+  const a = document.createElement('a');
+  a.href = '#';
+  a.className = 'suggestion-link';
+  a.textContent = name;
+  a.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    $('planetName').value = name;
+    doLookup();
+  });
+  return a;
+}
+
+
+function renderSuggestions(suggestions) {
+  if (!suggestions || suggestions.length === 0) return null;
+  const wrap = document.createElement('span');
+  wrap.appendChild(document.createTextNode('Did you mean '));
+  suggestions.forEach((name, i) => {
+    wrap.appendChild(makeSuggestionLink(name));
+    if (i < suggestions.length - 2) {
+      wrap.appendChild(document.createTextNode(', '));
+    } else if (i === suggestions.length - 2) {
+      wrap.appendChild(document.createTextNode(suggestions.length === 2 ? ' or ' : ', or '));
+    }
+  });
+  wrap.appendChild(document.createTextNode('?'));
+  return wrap;
+}
+
+function addLookupLine(text, className) {
+  const div = document.createElement('div');
+  div.className = 'lookup-line';
+  if (className) div.classList.add(className);
+  if (typeof text === 'string') {
+    div.textContent = text;
+  } else {
+    div.appendChild(text);
+  }
+  lookupStatusEl.appendChild(div);
+}
+
+async function doLookup() {
+  const planet = $('planetName').value.trim();
+  if (!planet) {
+    clearLookupStatus();
+    addLookupLine('Enter a planet name or TOI to look up.', 'text-muted');
+    return;
+  }
+
+ 
+  clearLookupStatus();
+  clearParameterFieldsForLookup();
+  clearResult();
+  lookupBaseline = null;
+  statusEl.textContent = '';
+  statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+
+  setLookupBusy(true);
+
+  let data;
+  try {
+    const resp = await fetch('/api/resolve?planet=' + encodeURIComponent(planet));
+    data = await resp.json();
+  } catch (e) {
+    addLookupLine('Lookup failed: ' + e.message, 'text-danger');
+    setLookupBusy(false);
+    return;
+  } finally {
+    setLookupBusy(false);
+  }
+
+ 
+  if (data.reason === 'error') {
+    addLookupLine('Lookup error: ' + (data.error || 'unknown error'), 'text-danger');
+    return;
+  }
+
+  
+  if (data.found !== true) {
+    addLookupLine(`Name: ${planet} not found.`, 'text-danger');
+    const sugg = renderSuggestions(data.suggestions);
+    if (sugg) addLookupLine(sugg, 'text-muted');
+    return;
+  }
+
+  
+  if (data.planet) {
+    $('planetName').value = data.planet;
+  }
+
+  
+  const foundLabels = [];
+  const missingLabels = [];
+
+  populateParameterValue('teff', data.teff);
+  if (typeof data.teff === 'number') {
+    foundLabels.push('Teff');
+  } else {
+    missingLabels.push('Teff');
+  }
+
+  populateParameterValue('logg', data.logg);
+  if (typeof data.logg === 'number') {
+    foundLabels.push('log(g)');
+  } else {
+    missingLabels.push('log(g)');
+  }
+
+  populateParameterValue('feh', data.feh);
+  if (!$('feh').disabled) {
+    if (typeof data.feh === 'number') {
+      foundLabels.push('[Fe/H]');
+    } else {
+      missingLabels.push('[Fe/H]');
+    }
+  }
+
+  
+  lookupBaseline = {
+    planet: data.planet,
+    teff: (typeof data.teff === 'number') ? data.teff : null,
+    logg: (typeof data.logg === 'number') ? data.logg : null,
+    feh:  (typeof data.feh  === 'number') ? data.feh  : null,
+  };
+
+  
+  const summary = buildFoundSummary(foundLabels, missingLabels, data.planet);
+  if (summary) addLookupLine(summary, 'text-muted');
+
+  
+  const sourceLabel = data.source === 'NEA'
+    ? 'NASA Exoplanet Archive Composite Parameters'
+    : (data.source === 'ExoFOP'
+        ? 'ExoFOP-TESS'
+        : data.source || 'unknown');
+  const citationDetail = data.citation ? `, ${data.citation}` : '';
+  addLookupLine(`Source: ${sourceLabel}${citationDetail}`, 'text-muted');
+
+  
+  if (typeof data.teff === 'number' && data.teff < 3500 && $('model').value === 'ATLAS') {
+    addLookupLine(
+      'Note: The ATLAS model does not support Teff below 3500 K. Switch to PHOENIX model.',
+      'text-muted',
+    );
+  }
+
+  
+  if ($('model').value === 'PHOENIX') {
+    if (typeof data.teff === 'number' && data.teff > 9800) {
+      addLookupLine(
+        'Note: The PHOENIX model does not support Teff above 9800 K. Switch to ATLAS model.',
+        'text-muted',
+      );
+    }
+    if (typeof data.logg === 'number' && data.logg < 3.5) {
+      addLookupLine(
+        'Note: The PHOENIX model does not support Log(g) below 3.5. Switch to ATLAS model.',
+        'text-muted',
+      );
+    }
+    if (typeof data.feh === 'number' && Math.abs(data.feh) >= 0.05) {
+      addLookupLine(
+        'Note: The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model and rerun planet Lookup.',
+        'text-muted',
+      );
+    }
+  }
+}
+
+
+function populateParameterValue(fieldId, value) {
+  const el = $(fieldId);
+  if (value === null || value === undefined) {
+    if (!el.disabled) el.value = '';
+  } else {
+    if (!el.disabled) el.value = value;
+  }
+}
+
+
+function joinLabels(labels) {
+  return labels.join(', ');
+}
+
+
+function buildFoundSummary(foundLabels, missingLabels, planetName) {
+  if (missingLabels.length === 0) return null;
+  const missingPhrase = `${joinLabels(missingLabels)} not found for ${planetName}.`;
+  if (foundLabels.length === 0) return missingPhrase;
+  return `${joinLabels(foundLabels)} found. ${missingPhrase}`;
+}
+
+lookupBtn.addEventListener('click', doLookup);
+
+
+$('planetName').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') {
+    ev.preventDefault();
+    doLookup();
+  }
 });
 </script>
 

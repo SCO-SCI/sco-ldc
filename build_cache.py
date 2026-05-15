@@ -1,14 +1,3 @@
-"""
-Regenerate data/tables.pkl from the raw source tables.
-
-Run this after editing any of tableab.dat, table5.dat, or CBBQUADRATIC.txt.
-The generated pickle is committed to the repo and loaded at app startup,
-which cuts cold-start time from ~3 s to ~100 ms on Render.
-
-Usage:
-    python build_cache.py
-"""
-
 import os
 import time
 import sys
@@ -39,7 +28,7 @@ def main() -> int:
         print(f"  {name:20s} {n:>7d} rows")
     print(f"wrote {cache_path} ({size_kb:.0f} KB)")
 
-    # Verify the cache round-trips correctly.
+    
     t0 = time.perf_counter()
     counts2 = ldc_core.load_tables(data_dir, use_cache=True)
     load_ms = (time.perf_counter() - t0) * 1000
