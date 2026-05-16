@@ -340,7 +340,7 @@ async function loadFilters() {
     const sel = $('filter');
     sel.innerHTML = '';
 
-    // Blank default option — forces user to actively choose a filter.
+    
     const placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = '— Select a filter —';
@@ -366,7 +366,7 @@ async function loadFilters() {
       sel.appendChild(og);
     }
 
-    // Default: blank. User must choose a filter before submission is accepted.
+    
     sel.value = '';
 
     sel.addEventListener('change', onFilterChange);
@@ -379,18 +379,14 @@ async function loadFilters() {
 }
 loadFilters();
 
-// Look up the filter's actual internal model entry that corresponds to
-// the dropdown's displayed model name. The dropdown shows "ATLAS" or
-// "PHOENIX". For C2018 TESS, "PHOENIX" maps to the PHOENIX-COND entry;
-// for CB2011 filters, "PHOENIX" maps to the PHOENIX entry; for CMG2022
-// CBB, only "ATLAS" is valid.
+
 function resolveModelEntry(filter, displayName) {
   if (!filter) return null;
   if (displayName === 'ATLAS') {
     return filter.models.find(m => m.model === 'ATLAS') || null;
   }
   if (displayName === 'PHOENIX') {
-    // Accept either the literal "PHOENIX" or the "PHOENIX-COND" variant.
+    
     return filter.models.find(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND') || null;
   }
   return null;
@@ -399,9 +395,7 @@ function resolveModelEntry(filter, displayName) {
 function onFilterChange() {
   const selectedCode = $('filter').value;
 
-  // Blank/no-filter state: clear hints, re-enable [Fe/H], leave the model
-  // dropdown alone (it shows whatever the user has selected — ATLAS by
-  // default). Cannot submit without a filter, so no compute can fire here.
+  
   if (!selectedCode) {
     currentFilter = null;
     currentModelEntry = null;
@@ -415,9 +409,7 @@ function onFilterChange() {
   currentFilter = FILTERS.find(f => f.code === selectedCode);
   if (!currentFilter) return;
 
-  // The model dropdown is static (ATLAS, PHOENIX). If the user's current
-  // selection isn't supported by this filter, auto-switch the dropdown
-  // to the supported option. Otherwise leave the user's choice alone.
+  
   const mSel = $('model');
   const hasAtlas   = currentFilter.models.some(m => m.model === 'ATLAS');
   const hasPhoenix = currentFilter.models.some(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND');
@@ -434,9 +426,7 @@ function onModelChange() {
   if (!currentFilter) return;
   let entry = resolveModelEntry(currentFilter, $('model').value);
 
-  // If the user picked a model that isn't supported by the current filter
-  // (e.g., manually switching to ATLAS when the filter is PHOENIX-only),
-  // revert to the supported option so the form stays in a valid state.
+  
   if (!entry) {
     const mSel = $('model');
     const fallback = mSel.value === 'ATLAS' ? 'PHOENIX' : 'ATLAS';
@@ -506,7 +496,7 @@ function paramsMatchBaseline() {
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();
 
-  // Check filter first — without a filter we can't proceed.
+  
   if (!currentFilter || !currentModelEntry) {
     statusEl.textContent = 'Please select a filter.';
     statusEl.classList.remove('text-success', 'text-muted');
@@ -516,7 +506,7 @@ form.addEventListener('submit', async (ev) => {
     return;
   }
 
-  // Check for missing required fields
+  
   const required = [
     { id: 'teff', label: 'T_eff' },
     { id: 'logg', label: 'log(g)' },
@@ -807,11 +797,14 @@ async function doLookup() {
   }
 
   populateParameterValue('feh', data.feh);
+  let fehSubstituted = false;
   if (!$('feh').disabled) {
     if (typeof data.feh === 'number') {
       foundLabels.push('[Fe/H]');
     } else {
-      missingLabels.push('[Fe/H]');
+      
+      $('feh').value = '0.0';
+      fehSubstituted = true;
     }
   }
 
@@ -820,12 +813,20 @@ async function doLookup() {
     planet: data.planet,
     teff: (typeof data.teff === 'number') ? data.teff : null,
     logg: (typeof data.logg === 'number') ? data.logg : null,
-    feh:  (typeof data.feh  === 'number') ? data.feh  : null,
+    feh:  (typeof data.feh  === 'number') ? data.feh  : (fehSubstituted ? 0.0 : null),
   };
 
   
   const summary = buildFoundSummary(foundLabels, missingLabels, data.planet);
   if (summary) addLookupLine(summary, 'text-muted');
+
+  
+  if (fehSubstituted) {
+    const noteDiv = document.createElement('div');
+    noteDiv.className = 'lookup-line text-muted feh-substitution-note';
+    noteDiv.textContent = '[Fe/H] = 0.0 substituted for blank return value.';
+    lookupStatusEl.appendChild(noteDiv);
+  }
 
   
   const sourceLabel = data.source === 'NEA'
@@ -899,6 +900,7 @@ $('planetName').addEventListener('keydown', (ev) => {
     doLookup();
   }
 });
+
 </script>
 
 </body>
