@@ -188,6 +188,11 @@
         <hr class="hr-double">
 
         <div class="mb-3">
+          <label for="filter" class="form-label">Filter</label>
+          <select class="form-select" id="filter" name="filter" required=""></select>
+        </div>
+
+        <div class="mb-3">
           <label for="teff" class="form-label">
             T<sub>eff</sub> (K)<span class="hint" id="teffHint">&nbsp;</span>
           </label>
@@ -206,11 +211,6 @@
             [Fe/H] (dex)<span class="hint" id="fehHint">&nbsp;</span>
           </label>
           <input type="number" class="form-control" id="feh" name="feh" step="0.01" required="">
-        </div>
-
-        <div class="mb-3">
-          <label for="filter" class="form-label">Filter</label>
-          <select class="form-select" id="filter" name="filter" required=""></select>
         </div>
 
         <div class="mb-3">
