@@ -191,21 +191,21 @@
           <label for="teff" class="form-label">
             T<sub>eff</sub> (K)<span class="hint" id="teffHint">&nbsp;</span>
           </label>
-          <input type="number" class="form-control" id="teff" name="teff" step="1" value="5778" required="">
+          <input type="number" class="form-control" id="teff" name="teff" step="1" required="">
         </div>
 
         <div class="mb-3">
           <label for="logg" class="form-label">
             log(g) (cgs dex)<span class="hint" id="loggHint">&nbsp;</span>
           </label>
-          <input type="number" class="form-control" id="logg" name="logg" step="0.01" value="4.44" required="">
+          <input type="number" class="form-control" id="logg" name="logg" step="0.01" required="">
         </div>
 
         <div class="mb-3">
           <label for="feh" class="form-label">
             [Fe/H] (dex)<span class="hint" id="fehHint">&nbsp;</span>
           </label>
-          <input type="number" class="form-control" id="feh" name="feh" step="0.01" value="0.0" required="">
+          <input type="number" class="form-control" id="feh" name="feh" step="0.01" required="">
         </div>
 
         <div class="mb-3">
@@ -215,7 +215,10 @@
 
         <div class="mb-3">
           <label for="model" class="form-label">Stellar atmosphere model</label>
-          <select class="form-select" id="model" name="model"></select>
+          <select class="form-select" id="model" name="model">
+            <option value="ATLAS" selected>ATLAS</option>
+            <option value="PHOENIX">PHOENIX</option>
+          </select>
         </div>
 
         <div class="d-flex gap-2 mt-3">
@@ -334,6 +337,12 @@ async function loadFilters() {
     const sel = $('filter');
     sel.innerHTML = '';
 
+    // Blank default option — forces user to actively choose a filter.
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '— Select a filter —';
+    sel.appendChild(placeholder);
+
     
     const groups = new Map();
     for (const f of FILTERS) {
@@ -354,8 +363,8 @@ async function loadFilters() {
       sel.appendChild(og);
     }
 
-    
-    sel.value = FILTERS.some(f => f.code === 'Kp') ? 'Kp' : FILTERS[0].code;
+    // Default: blank. User must choose a filter before submission is accepted.
+    sel.value = '';
 
     sel.addEventListener('change', onFilterChange);
     $('model').addEventListener('change', onModelChange);
@@ -367,29 +376,72 @@ async function loadFilters() {
 }
 loadFilters();
 
-function onFilterChange() {
-  currentFilter = FILTERS.find(f => f.code === $('filter').value);
-  if (!currentFilter) return;
-  
-  const mSel = $('model');
-  mSel.innerHTML = '';
-  const models = [...currentFilter.models].sort((a, b) => {
-    const o = { 'ATLAS': 0, 'PHOENIX': 1, 'PHOENIX-COND': 2 };
-    return (o[a.model] ?? 9) - (o[b.model] ?? 9);
-  });
-  for (const m of models) {
-    const opt = document.createElement('option');
-    opt.value = m.model;
-    opt.textContent = m.model;
-    mSel.appendChild(opt);
+// Look up the filter's actual internal model entry that corresponds to
+// the dropdown's displayed model name. The dropdown shows "ATLAS" or
+// "PHOENIX". For C2018 TESS, "PHOENIX" maps to the PHOENIX-COND entry;
+// for CB2011 filters, "PHOENIX" maps to the PHOENIX entry; for CMG2022
+// CBB, only "ATLAS" is valid.
+function resolveModelEntry(filter, displayName) {
+  if (!filter) return null;
+  if (displayName === 'ATLAS') {
+    return filter.models.find(m => m.model === 'ATLAS') || null;
   }
-  mSel.value = models[0].model;
+  if (displayName === 'PHOENIX') {
+    // Accept either the literal "PHOENIX" or the "PHOENIX-COND" variant.
+    return filter.models.find(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND') || null;
+  }
+  return null;
+}
+
+function onFilterChange() {
+  const selectedCode = $('filter').value;
+
+  // Blank/no-filter state: clear hints, re-enable [Fe/H], leave the model
+  // dropdown alone (it shows whatever the user has selected — ATLAS by
+  // default). Cannot submit without a filter, so no compute can fire here.
+  if (!selectedCode) {
+    currentFilter = null;
+    currentModelEntry = null;
+    $('teffHint').textContent = '';
+    $('loggHint').textContent = '';
+    $('fehHint').textContent = '';
+    $('feh').disabled = false;
+    return;
+  }
+
+  currentFilter = FILTERS.find(f => f.code === selectedCode);
+  if (!currentFilter) return;
+
+  // The model dropdown is static (ATLAS, PHOENIX). If the user's current
+  // selection isn't supported by this filter, auto-switch the dropdown
+  // to the supported option. Otherwise leave the user's choice alone.
+  const mSel = $('model');
+  const hasAtlas   = currentFilter.models.some(m => m.model === 'ATLAS');
+  const hasPhoenix = currentFilter.models.some(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND');
+  if (mSel.value === 'ATLAS' && !hasAtlas && hasPhoenix) {
+    mSel.value = 'PHOENIX';
+  } else if (mSel.value === 'PHOENIX' && !hasPhoenix && hasAtlas) {
+    mSel.value = 'ATLAS';
+  }
+
   onModelChange();
 }
 
 function onModelChange() {
   if (!currentFilter) return;
-  currentModelEntry = currentFilter.models.find(m => m.model === $('model').value);
+  let entry = resolveModelEntry(currentFilter, $('model').value);
+
+  // If the user picked a model that isn't supported by the current filter
+  // (e.g., manually switching to ATLAS when the filter is PHOENIX-only),
+  // revert to the supported option so the form stays in a valid state.
+  if (!entry) {
+    const mSel = $('model');
+    const fallback = mSel.value === 'ATLAS' ? 'PHOENIX' : 'ATLAS';
+    entry = resolveModelEntry(currentFilter, fallback);
+    if (entry) mSel.value = fallback;
+  }
+
+  currentModelEntry = entry;
   if (!currentModelEntry) return;
   updateHints();
 }
@@ -450,7 +502,16 @@ function paramsMatchBaseline() {
 
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  if (!currentFilter || !currentModelEntry) return;
+
+  // Check filter first — without a filter we can't proceed.
+  if (!currentFilter || !currentModelEntry) {
+    statusEl.textContent = 'Please select a filter.';
+    statusEl.classList.remove('text-success', 'text-muted');
+    statusEl.classList.add('text-danger');
+    $('filter').focus();
+    clearResult();
+    return;
+  }
 
   // Check for missing required fields
   const required = [
@@ -596,7 +657,10 @@ $('exampleBtn').addEventListener('click', () => {
 $('clearBtn').addEventListener('click', () => {
   $('teff').value = '';
   $('logg').value = '';
-  if (!$('feh').disabled) $('feh').value = '';
+  $('feh').value = '';
+  $('filter').value = '';
+  $('model').value = 'ATLAS';
+  onFilterChange();
   $('planetName').value = '';
   clearLookupStatus();
   lookupBaseline = null;
