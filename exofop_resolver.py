@@ -23,7 +23,7 @@ EXOFOP_LIVE_TIMEOUT_SECONDS = 15.0
 
 
 _TOI_PATTERN = re.compile(
-    r"^\s*TOI[-\s]?(\d+)\.(\d+)\s*$",
+    r"^\s*TOI[-\s]?(\d+)(?:(?:\.(\d+))|(?:\s+([a-z])))?\s*$",
     re.IGNORECASE,
 )
 
@@ -39,25 +39,30 @@ _COL_FEH = "Stellar Metallicity"
 
 _cache_lock = threading.Lock()
 _cache: dict[str, dict] = {}
+_host_index: dict[int, list[str]] = {}
 _last_successful_live_refresh_utc: Optional[datetime] = None
 
 
 
 
-def parse_toi_identifier(text: str) -> Optional[tuple[int, str]]:
-    
+
+def parse_toi_identifier(text: str) -> Optional[tuple[int, Optional[str]]]:
+   
     if not isinstance(text, str):
         return None
     match = _TOI_PATTERN.match(text)
     if not match:
         return None
     host = int(match.group(1))
-    canonical = f"{host}.{match.group(2)}"
-    return host, canonical
+    component_digits = match.group(2)
+    if component_digits:
+        canonical = f"{host}.{component_digits}"
+        return host, canonical
+    return host, None
 
 
 def looks_like_toi(text: str) -> bool:
-    
+   
     return parse_toi_identifier(text) is not None
 
 
@@ -69,11 +74,20 @@ def query_exofop(toi_input: str) -> dict:
     host_toi, canonical_toi = parsed
 
     
-    row = _cache.get(canonical_toi)
-    if row is not None:
-        return _row_to_response(toi_input, host_toi, canonical_toi, row)
+    if canonical_toi is not None:
+        row = _cache.get(canonical_toi)
+        if row is not None:
+            return _row_to_response(toi_input, host_toi, canonical_toi, row)
 
     
+    components = _host_index.get(host_toi)
+    if components:
+        first_canonical = components[0]
+        row = _cache.get(first_canonical)
+        if row is not None:
+            return _row_to_response(toi_input, host_toi, first_canonical, row)
+
+  
     if _cache:
         return {"found": False, "planet": toi_input, "reason": "not_in_exofop"}
 
@@ -95,8 +109,8 @@ def _row_to_response(toi_input: str, host_toi: int, canonical_toi: str, row: dic
     }
 
 
-def _live_single_lookup(toi_input: str, host_toi: int, canonical_toi: str) -> dict:
-    
+def _live_single_lookup(toi_input: str, host_toi: int, canonical_toi: Optional[str]) -> dict:
+   
     params = {"toi": str(host_toi), "output": "pipe"}
 
     try:
@@ -122,15 +136,38 @@ def _live_single_lookup(toi_input: str, host_toi: int, canonical_toi: str) -> di
     if rows is None:
         return _error_response(toi_input, "ExoFOP returned unparseable response")
 
-    for row in rows:
-        if row.get(_COL_TOI, "").strip() == canonical_toi:
-            return _row_to_response(toi_input, host_toi, canonical_toi, {
-                "st_teff": row.get(_COL_TEFF),
-                "st_logg": row.get(_COL_LOGG),
-                "st_met":  row.get(_COL_FEH),
-            })
+    
+    if canonical_toi is not None:
+        for row in rows:
+            if row.get(_COL_TOI, "").strip() == canonical_toi:
+                return _row_to_response(toi_input, host_toi, canonical_toi, {
+                    "st_teff": row.get(_COL_TEFF),
+                    "st_logg": row.get(_COL_LOGG),
+                    "st_met":  row.get(_COL_FEH),
+                })
+        return {"found": False, "planet": toi_input, "reason": "not_in_exofop"}
 
-    return {"found": False, "planet": toi_input, "reason": "not_in_exofop"}
+    
+    candidates = []
+    for row in rows:
+        toi_str = row.get(_COL_TOI, "").strip()
+        if not toi_str:
+            continue
+        try:
+            host_str, comp_str = toi_str.split(".", 1)
+            comp_int = int(comp_str)
+        except (ValueError, AttributeError):
+            continue
+        candidates.append((comp_int, toi_str, row))
+    if not candidates:
+        return {"found": False, "planet": toi_input, "reason": "not_in_exofop"}
+    candidates.sort(key=lambda c: c[0])
+    _, chosen_canonical, chosen_row = candidates[0]
+    return _row_to_response(toi_input, host_toi, chosen_canonical, {
+        "st_teff": chosen_row.get(_COL_TEFF),
+        "st_logg": chosen_row.get(_COL_LOGG),
+        "st_met":  chosen_row.get(_COL_FEH),
+    })
 
 
 
@@ -183,7 +220,7 @@ def cache_status() -> dict:
 
 
 def _fetch_full_table_from_exofop() -> list[dict]:
-    
+  
     params = {"sort": "toi", "output": "pipe"}
     response = httpx.get(
         EXOFOP_TOI_URL,
@@ -277,18 +314,41 @@ def _set_cache(rows: list[dict], refresh_time: Optional[datetime]) -> None:
 
 
 def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> None:
-    
-    global _cache, _last_successful_live_refresh_utc
+   
+    global _cache, _host_index, _last_successful_live_refresh_utc
     new_cache: dict[str, dict] = {}
+    new_host_index: dict[int, list[str]] = {}
     for row in rows:
         toi = row.get("toi")
         if not toi:
             continue
-        if toi not in new_cache:
-            new_cache[toi] = row
+        if toi in new_cache:
+            continue
+        new_cache[toi] = row
+        
+        try:
+            host_str, comp_str = toi.split(".", 1)
+            host_int = int(host_str)
+            new_host_index.setdefault(host_int, []).append(toi)
+        except (ValueError, AttributeError):
+            continue
+   
+    for host_int, components in new_host_index.items():
+        components.sort(key=lambda s: _component_sort_key(s))
+
     _cache = new_cache
+    _host_index = new_host_index
     if refresh_time is not None:
         _last_successful_live_refresh_utc = refresh_time
+
+
+def _component_sort_key(canonical_toi: str) -> int:
+   
+    try:
+        _, comp_str = canonical_toi.split(".", 1)
+        return int(comp_str)
+    except (ValueError, AttributeError):
+        return 9999  
 
 
 def _to_float_or_none(value):

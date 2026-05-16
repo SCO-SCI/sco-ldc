@@ -1,5 +1,3 @@
-# Cache refresh 1
-
 from __future__ import annotations
 
 import logging
@@ -82,7 +80,7 @@ _refresh_history_lock = threading.Lock()
 
 
 def _append_refresh_history(entry: dict) -> None:
-    
+   
     with _refresh_history_lock:
         _refresh_history.append(entry)
         
@@ -91,13 +89,13 @@ def _append_refresh_history(entry: dict) -> None:
 
 
 def _get_refresh_history() -> list[dict]:
-    
+   
     with _refresh_history_lock:
         return list(reversed(_refresh_history))
 
 
 def _is_cache_fresh() -> bool:
-    
+   
     nea_status = nea_resolver.cache_status()
     exofop_status = exofop_resolver.cache_status()
     nea_ts = nea_status.get("refreshed_utc")
@@ -183,7 +181,7 @@ def _refresh_scheduler() -> None:
                     nea_done, exofop_done,
                 )
 
-        
+       
         _append_refresh_history({
             "started_utc": sequence_start,
             "finished_utc": datetime.now(timezone.utc),
@@ -203,7 +201,7 @@ logger.info("Refresh scheduler thread started")
 
 @app.get("/api/health")
 def health() -> dict:
-    
+   
     return {
         "status": "ok",
         "version": app.version,
@@ -239,24 +237,42 @@ def compute(
 
 @app.get("/api/resolve")
 def resolve(
-    planet: str = Query(..., description="Exoplanet name (e.g. 'WASP-23 b') or TOI identifier (e.g. 'TOI-1234.01')"),
+    planet: str = Query(..., description="Exoplanet name (e.g. 'WASP-23 b') or TOI identifier (e.g. 'TOI-1234.01', 'TOI-1234 b', or 'TOI-1234')"),
 ) -> dict:
     
     canonical = nea_resolver.canonicalize_name(planet)
     query_name = canonical if canonical is not None else planet
 
+    
     nea_result = nea_resolver.query_nea(query_name)
     if nea_result.get("found") is True:
         return nea_result
     if nea_result.get("reason") == "error":
         return nea_result
 
+   
     if exofop_resolver.looks_like_toi(planet):
-        exofop_result = exofop_resolver.query_exofop(planet)
-        if exofop_result.get("found") is True:
-            return exofop_result
+        parsed = exofop_resolver.parse_toi_identifier(planet)
+        if parsed is not None:
+            host_int, component = parsed
+            if component is not None:
+                # ".NN" form: ExoFOP first.
+                exofop_result = exofop_resolver.query_exofop(planet)
+                if exofop_result.get("found") is True:
+                    return exofop_result
+                host_nea_result = nea_resolver.query_nea_by_host(f"TOI-{host_int}")
+                if host_nea_result is not None:
+                    return host_nea_result
+            else:
+                # Bare-host or letter form: NEA first.
+                host_nea_result = nea_resolver.query_nea_by_host(f"TOI-{host_int}")
+                if host_nea_result is not None:
+                    return host_nea_result
+                exofop_result = exofop_resolver.query_exofop(planet)
+                if exofop_result.get("found") is True:
+                    return exofop_result
 
-    
+  
     nea_result["suggestions"] = nea_resolver.get_suggestions(planet)
     return nea_result
 
@@ -403,7 +419,7 @@ if os.path.isdir(STATIC_DIR):
 
 @app.get("/")
 def root():
-    """Serve the single-page frontend."""
+   
     index_path = os.path.join(STATIC_DIR, "index.html")
     if not os.path.exists(index_path):
         return JSONResponse(

@@ -34,6 +34,7 @@ NEA_COLUMNS = ["pl_name", "hostname", "st_teff", "st_logg", "st_met"]
 _cache_lock = threading.Lock()
 _cache: dict[str, dict] = {}
 _lower_keys: list[str] = []
+_hostname_index: dict[str, list[dict]] = {}
 _last_successful_live_refresh_utc: Optional[datetime] = None
 
 
@@ -56,6 +57,17 @@ def query_nea(planet_name: str) -> dict:
 
     
     return _live_single_lookup(planet_name)
+
+
+def query_nea_by_host(hostname: str) -> Optional[dict]:
+    
+    if not hostname:
+        return None
+    rows = _hostname_index.get(hostname.lower())
+    if not rows:
+        return None
+    
+    return _row_to_response(rows[0])
 
 
 def _row_to_response(row: dict) -> dict:
@@ -116,7 +128,7 @@ def get_suggestions(query: str) -> list[str]:
         return []
     query_lower = query.lower()
 
-    
+    # Snapshot under the lock to avoid a half-updated view during refresh.
     with _cache_lock:
         keys_snapshot = list(_lower_keys)
         cache_snapshot = dict(_cache)
@@ -253,17 +265,28 @@ def _set_cache(rows: list[dict], refresh_time: Optional[datetime]) -> None:
 
 def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> None:
     
-    global _cache, _lower_keys, _last_successful_live_refresh_utc
+    global _cache, _lower_keys, _hostname_index, _last_successful_live_refresh_utc
     new_cache: dict[str, dict] = {}
+    new_hostname_index: dict[str, list[dict]] = {}
     for row in rows:
         name = row.get("pl_name")
         if not name:
             continue
         key = name.lower()
-        if key not in new_cache:
-            new_cache[key] = row
+        if key in new_cache:
+            continue
+        new_cache[key] = row
+        
+        hostname = row.get("hostname")
+        if hostname:
+            new_hostname_index.setdefault(hostname.lower(), []).append(row)
+    
+    for hostname_key, host_rows in new_hostname_index.items():
+        host_rows.sort(key=lambda r: r.get("pl_name", "").lower())
+
     _cache = new_cache
     _lower_keys = list(new_cache.keys())
+    _hostname_index = new_hostname_index
     if refresh_time is not None:
         _last_successful_live_refresh_utc = refresh_time
 
