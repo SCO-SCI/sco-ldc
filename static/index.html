@@ -304,7 +304,7 @@
   <hr>
 
   <footer class="text-end pb-2">
-    SCO-LDC v3.0. Provided by Ed Mullen, Sycamore Canyon Observatory ·
+    SCO-LDC v3.0.  Provided by Ed Mullen, Sycamore Canyon Observatory ·
     <a href="mailto:sco.sci@outlook.com?subject=SCO-LDC%20inquiry"
        style="color: inherit; text-decoration: none;"
        title="Email Ed Mullen">sco.sci@outlook.com</a>
@@ -816,12 +816,7 @@ async function doLookup() {
     if (typeof data.feh === 'number') {
       foundLabels.push('[Fe/H]');
     } else {
-      // [Fe/H] is missing from the source. Substitute 0.0 (solar) so the
-      // user can compute LDCs without first having to type a value
-      // themselves. The note below tells them we did this; the value can
-      // be manually overridden and the note clears. Do NOT add [Fe/H] to
-      // the found summary - the substitution note is the honest signal
-      // about where the value came from.
+      
       $('feh').value = '0.0';
       fehSubstituted = true;
     }
@@ -839,11 +834,7 @@ async function doLookup() {
   const summary = buildFoundSummary(foundLabels, missingLabels, data.planet);
   if (summary) addLookupLine(summary, 'text-muted');
 
-  // If [Fe/H] was substituted with 0.0 because the source had no value,
-  // surface that fact below the planet name. The note records a
-  // historical fact (the source had no [Fe/H], we filled in 0.0) and
-  // persists even if the user overrides the value. It clears only when
-  // a new lookup starts or the Clear button wipes the status area.
+  
   if (fehSubstituted) {
     const noteDiv = document.createElement('div');
     noteDiv.className = 'lookup-line text-muted feh-substitution-note';
