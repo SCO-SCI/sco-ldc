@@ -332,14 +332,6 @@ let currentModelEntry = null;
 
 let lookupBaseline = null;
 
-// Tracks whether the current Teff/log(g)/[Fe/H] values came from a
-// successful planet-name lookup. When true, changing the filter
-// triggers auto-compute (the user is asking for "this planet, that
-// filter"). When false, parameters were entered or modified manually
-// and the user must click Compute LDCs explicitly to avoid surprising
-// auto-computes during exploratory editing.
-let parametersFromLookup = false;
-
 
 const PARAM_EQ_EPSILON = 1e-9;
 
@@ -441,14 +433,13 @@ function onFilterChange() {
 
   onModelChange();
 
-  // If the user just changed filters while parameters are still from a
-  // previous successful lookup, re-compute LDCs automatically for the
-  // new filter. This is the "same planet, different filter" flow.
-  // Skipped if parameters were entered/edited manually (the user is
-  // exploring values and would be surprised by automatic recomputes).
-  if (parametersFromLookup) {
-    tryAutoCompute();
-  }
+  // After a filter change, attempt auto-compute. tryAutoCompute()
+  // checks that all required inputs (Teff, log(g), [Fe/H], filter) are
+  // populated with valid values before submitting. If parameters are
+  // missing or the filter was just cleared, it returns quietly.
+  // Manual edits to parameters never trigger compute on their own —
+  // only a filter change does, and only when valid values are present.
+  tryAutoCompute();
 }
 
 function onModelChange() {
@@ -678,17 +669,21 @@ $('copyBtn').addEventListener('click', async () => {
 
 $('exampleBtn').addEventListener('click', () => {
   
-  $('filter').value = 'Kp';
-  onFilterChange();
-  $('model').value = 'ATLAS';
-  onModelChange();
-  $('teff').value = 5778;
-  $('logg').value = 4.44;
-  if (!$('feh').disabled) $('feh').value = 0.0;
+  // Order matters: clear planet name & lookup status first, then set
+  // parameters, THEN set the filter. The filter assignment calls
+  // onFilterChange() which fires tryAutoCompute(); by that time the
+  // parameter fields hold the example values, so auto-compute (if it
+  // fires) uses those values and the displayed result matches the
+  // fields.
   $('planetName').value = '';
   clearLookupStatus();
   lookupBaseline = null;
-  parametersFromLookup = false;
+  $('teff').value = 5778;
+  $('logg').value = 4.44;
+  if (!$('feh').disabled) $('feh').value = 0.0;
+  $('model').value = 'ATLAS';
+  $('filter').value = 'Kp';
+  onFilterChange();
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success');
   statusEl.classList.add('text-muted');
@@ -704,7 +699,6 @@ $('clearBtn').addEventListener('click', () => {
   $('planetName').value = '';
   clearLookupStatus();
   lookupBaseline = null;
-  parametersFromLookup = false;
   clearResult();
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success');
@@ -790,7 +784,6 @@ async function doLookup() {
   clearParameterFieldsForLookup();
   clearResult();
   lookupBaseline = null;
-  parametersFromLookup = false;
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
 
@@ -916,11 +909,12 @@ async function doLookup() {
     }
   }
 
-  // Successful lookup: the parameters now visible in the fields came
-  // from the lookup, so the filter dropdown becomes a hot trigger for
-  // auto-compute. Then attempt the compute right away — if the filter
-  // is also valid, the user sees LDCs without a button click.
-  parametersFromLookup = true;
+  // Successful lookup: parameters now populate the fields. Attempt
+  // auto-compute right away — if the filter is also valid,
+  // tryAutoCompute() submits and LDCs appear without a button click.
+  // If no filter is selected yet, tryAutoCompute() returns quietly and
+  // the user's next filter pick will trigger the compute via
+  // onFilterChange.
   tryAutoCompute();
 }
 
@@ -955,19 +949,6 @@ $('planetName').addEventListener('keydown', (ev) => {
     ev.preventDefault();
     doLookup();
   }
-});
-
-// When the user manually edits Teff, log(g), or [Fe/H], the parameters
-// are no longer "from the lookup" — they're now being explored. Flip
-// the flag off so a subsequent filter change won't surprise the user
-// with an auto-compute using half-edited values. Setting .value
-// programmatically (e.g. from doLookup, Fill Example, Clear) does NOT
-// fire the 'input' event, so this listener only catches real user
-// typing, which is exactly what we want.
-['teff', 'logg', 'feh'].forEach(id => {
-  $(id).addEventListener('input', () => {
-    parametersFromLookup = false;
-  });
 });
 
 </script>
