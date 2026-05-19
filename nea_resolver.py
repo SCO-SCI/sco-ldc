@@ -16,6 +16,14 @@ NEA_TAP_URL = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
 NEA_CITATION = "DOI: 10.26133/NEA13"
 
 
+def _full_citation() -> str:
+
+    if _last_successful_live_refresh_utc is None:
+        return NEA_CITATION
+    ts = _last_successful_live_refresh_utc.strftime("%Y-%m-%d %H:%M UTC")
+    return f"{NEA_CITATION}, {ts}"
+
+
 NEA_BULK_TIMEOUT_SECONDS = 60.0
 
 
@@ -80,7 +88,7 @@ def _row_to_response(row: dict) -> dict:
         "logg": _to_float_or_none(row.get("st_logg")),
         "feh":  _to_float_or_none(row.get("st_met")),
         "source": "NEA",
-        "citation": NEA_CITATION,
+        "citation": _full_citation(),
     }
 
 
@@ -123,12 +131,12 @@ def canonicalize_name(name: str) -> Optional[str]:
 
 
 def get_suggestions(query: str) -> list[str]:
-    
+   
     if not _cache or not query:
         return []
     query_lower = query.lower()
 
-    # Snapshot under the lock to avoid a half-updated view during refresh.
+   
     with _cache_lock:
         keys_snapshot = list(_lower_keys)
         cache_snapshot = dict(_cache)
@@ -178,7 +186,7 @@ def refresh_cache_from_live() -> bool:
 
 
 def cache_status() -> dict:
-    
+   
     return {
         "count": len(_cache),
         "refreshed_utc": _last_successful_live_refresh_utc.strftime("%Y-%m-%d %H:%M UTC")
@@ -230,7 +238,7 @@ def _load_table_from_file(path: str) -> list[dict]:
             if not stripped or stripped.startswith("#"):
                 continue
             parts = stripped.split("\t")
-            # Pad to 5 if any cells are missing at the end (TSV-trim).
+            
             while len(parts) < 5:
                 parts.append("")
             name = parts[0].strip()
@@ -247,7 +255,7 @@ def _load_table_from_file(path: str) -> list[dict]:
 
 
 def _parse_cell(cell: str):
-    
+  
     s = cell.strip()
     if s == "":
         return None
@@ -258,13 +266,13 @@ def _parse_cell(cell: str):
 
 
 def _set_cache(rows: list[dict], refresh_time: Optional[datetime]) -> None:
-    
+  
     with _cache_lock:
         _set_cache_locked(rows, refresh_time)
 
 
 def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> None:
-    
+   
     global _cache, _lower_keys, _hostname_index, _last_successful_live_refresh_utc
     new_cache: dict[str, dict] = {}
     new_hostname_index: dict[str, list[dict]] = {}
@@ -276,11 +284,11 @@ def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> Non
         if key in new_cache:
             continue
         new_cache[key] = row
-        
+       
         hostname = row.get("hostname")
         if hostname:
             new_hostname_index.setdefault(hostname.lower(), []).append(row)
-    
+  
     for hostname_key, host_rows in new_hostname_index.items():
         host_rows.sort(key=lambda r: r.get("pl_name", "").lower())
 

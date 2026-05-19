@@ -13,7 +13,15 @@ import httpx
 EXOFOP_TOI_URL = "https://exofop.ipac.caltech.edu/tess/download_toi.php"
 
 
-EXOFOP_CITATION = "ExoFOP-TESS, NExScI/Caltech-IPAC"
+EXOFOP_CITATION = "NExScI/Caltech-IPAC"
+
+
+def _full_citation() -> str:
+    
+    if _last_successful_live_refresh_utc is None:
+        return EXOFOP_CITATION
+    ts = _last_successful_live_refresh_utc.strftime("%Y-%m-%d %H:%M UTC")
+    return f"{EXOFOP_CITATION}, {ts}"
 
 
 EXOFOP_BULK_TIMEOUT_SECONDS = 60.0
@@ -47,7 +55,7 @@ _last_successful_live_refresh_utc: Optional[datetime] = None
 
 
 def parse_toi_identifier(text: str) -> Optional[tuple[int, Optional[str]]]:
-   
+    
     if not isinstance(text, str):
         return None
     match = _TOI_PATTERN.match(text)
@@ -62,7 +70,7 @@ def parse_toi_identifier(text: str) -> Optional[tuple[int, Optional[str]]]:
 
 
 def looks_like_toi(text: str) -> bool:
-   
+    
     return parse_toi_identifier(text) is not None
 
 
@@ -73,7 +81,7 @@ def query_exofop(toi_input: str) -> dict:
         return _error_response(toi_input, "Input is not a recognized TOI identifier")
     host_toi, canonical_toi = parsed
 
-    
+  
     if canonical_toi is not None:
         row = _cache.get(canonical_toi)
         if row is not None:
@@ -87,7 +95,7 @@ def query_exofop(toi_input: str) -> dict:
         if row is not None:
             return _row_to_response(toi_input, host_toi, first_canonical, row)
 
-  
+    
     if _cache:
         return {"found": False, "planet": toi_input, "reason": "not_in_exofop"}
 
@@ -105,12 +113,12 @@ def _row_to_response(toi_input: str, host_toi: int, canonical_toi: str, row: dic
         "logg": _to_float_or_none(row.get("st_logg")),
         "feh":  _to_float_or_none(row.get("st_met")),
         "source": "ExoFOP",
-        "citation": EXOFOP_CITATION,
+        "citation": _full_citation(),
     }
 
 
 def _live_single_lookup(toi_input: str, host_toi: int, canonical_toi: Optional[str]) -> dict:
-   
+    
     params = {"toi": str(host_toi), "output": "pipe"}
 
     try:
@@ -147,7 +155,7 @@ def _live_single_lookup(toi_input: str, host_toi: int, canonical_toi: Optional[s
                 })
         return {"found": False, "planet": toi_input, "reason": "not_in_exofop"}
 
-    
+   
     candidates = []
     for row in rows:
         toi_str = row.get(_COL_TOI, "").strip()
@@ -220,7 +228,7 @@ def cache_status() -> dict:
 
 
 def _fetch_full_table_from_exofop() -> list[dict]:
-  
+    
     params = {"sort": "toi", "output": "pipe"}
     response = httpx.get(
         EXOFOP_TOI_URL,
@@ -249,7 +257,7 @@ def _fetch_full_table_from_exofop() -> list[dict]:
 
 
 def _parse_pipe_table(text: str) -> Optional[list[dict]]:
-    
+   
     lines = text.splitlines()
     if not lines:
         return None
@@ -314,7 +322,7 @@ def _set_cache(rows: list[dict], refresh_time: Optional[datetime]) -> None:
 
 
 def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> None:
-   
+    
     global _cache, _host_index, _last_successful_live_refresh_utc
     new_cache: dict[str, dict] = {}
     new_host_index: dict[int, list[str]] = {}
@@ -343,7 +351,7 @@ def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> Non
 
 
 def _component_sort_key(canonical_toi: str) -> int:
-   
+    
     try:
         _, comp_str = canonical_toi.split(".", 1)
         return int(comp_str)
