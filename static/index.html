@@ -903,14 +903,21 @@ async function doLookup() {
     lookupStatusEl.appendChild(noteDiv);
   }
 
-  
-  const sourceLabel = data.source === 'NEA'
-    ? 'NASA Exoplanet Archive Composite Parameters'
-    : (data.source === 'ExoFOP'
-        ? 'ExoFOP-TESS'
-        : data.source || 'unknown');
-  const citationDetail = data.citation ? `, ${data.citation}` : '';
-  addLookupLine(`Source: ${sourceLabel}${citationDetail}`, 'text-muted');
+  // Suppress the Source/citation line when the solar-mismatch guard
+  // will block LDC computation. Showing a citation when no result will
+  // appear is confusing — the citation attributes nothing the user can
+  // see. The PHOENIX/non-zero-[Fe/H] warning below explains the
+  // situation; the citation can return once the user switches to ATLAS
+  // and reruns the lookup.
+  if (!hasSolarMismatch()) {
+    const sourceLabel = data.source === 'NEA'
+      ? 'NASA Exoplanet Archive Composite Parameters'
+      : (data.source === 'ExoFOP'
+          ? 'ExoFOP-TESS'
+          : data.source || 'unknown');
+    const citationDetail = data.citation ? `, ${data.citation}` : '';
+    addLookupLine(`Source: ${sourceLabel}${citationDetail}`, 'text-muted');
+  }
 
   
   if (typeof data.teff === 'number' && data.teff < 3500 && $('model').value === 'ATLAS') {
