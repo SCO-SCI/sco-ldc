@@ -516,17 +516,34 @@ function paramsMatchBaseline() {
 }
 
 
+// Returns true when the form is in a "solar-locked grid + lookup
+// returned non-zero [Fe/H]" state. In that situation the displayed
+// [Fe/H] (locked at 0.0) does not match the planet's actual [Fe/H]
+// from the lookup, so any LDCs computed against the displayed value
+// would be misleading. The compute entry points refuse to compute
+// when this returns true. The 0.05 threshold matches the warning
+// message that doLookup surfaces for the same situation.
+function hasSolarMismatch() {
+  if (!$('feh').disabled) return false;
+  if (lookupBaseline === null) return false;
+  if (typeof lookupBaseline.feh !== 'number') return false;
+  return Math.abs(lookupBaseline.feh) >= 0.05;
+}
+
 // Programmatically trigger the compute flow that the "Compute LDCs"
 // button normally invokes, but only when all required inputs are
 // already populated with valid values. Uses form.requestSubmit() so the
 // existing submit handler fires unchanged — same validation, same
 // network call, same result rendering. If anything is missing, returns
-// quietly without disturbing the UI.
+// quietly without disturbing the UI. Also refuses silently when the
+// solar-locked grid disagrees with the lookup's actual [Fe/H], since
+// the user already sees the explanatory warning under the planet name.
 function tryAutoCompute() {
   if (!$('filter').value) return;
   if (!$('teff').value.trim()) return;
   if (!$('logg').value.trim()) return;
   if (!$('feh').value.trim()) return;
+  if (hasSolarMismatch()) return;
   form.requestSubmit();
 }
 
@@ -539,6 +556,22 @@ form.addEventListener('submit', async (ev) => {
     statusEl.classList.remove('text-success', 'text-muted');
     statusEl.classList.add('text-danger');
     $('filter').focus();
+    clearResult();
+    return;
+  }
+
+  // Refuse to compute when the current filter+model is solar-locked
+  // ([Fe/H] disabled and held at 0.0) but the most recent lookup
+  // returned a non-zero [Fe/H] for the planet. The displayed solar
+  // [Fe/H] does not match the planet, so any LDCs would be misleading.
+  // The user has already seen an explanatory note under the planet
+  // name; this message points them at the action they need to take.
+  if (hasSolarMismatch()) {
+    statusEl.textContent = 'Cannot compute: the selected grid is solar-metallicity only, '
+      + 'but the planet\u2019s [Fe/H] is non-zero. Switch to the ATLAS model and rerun '
+      + 'planet Lookup.';
+    statusEl.classList.remove('text-success', 'text-muted');
+    statusEl.classList.add('text-danger');
     clearResult();
     return;
   }
