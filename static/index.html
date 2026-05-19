@@ -520,14 +520,34 @@ function paramsMatchBaseline() {
 // returned non-zero [Fe/H]" state. In that situation the displayed
 // [Fe/H] (locked at 0.0) does not match the planet's actual [Fe/H]
 // from the lookup, so any LDCs computed against the displayed value
-// would be misleading. The compute entry points refuse to compute
-// when this returns true. The 0.05 threshold matches the warning
-// message that doLookup surfaces for the same situation.
+// would be misleading. The submit handler refuses with a specific
+// error message when this returns true. The 0.05 threshold matches
+// the warning message that doLookup surfaces for the same situation.
 function hasSolarMismatch() {
   if (!$('feh').disabled) return false;
   if (lookupBaseline === null) return false;
   if (typeof lookupBaseline.feh !== 'number') return false;
   return Math.abs(lookupBaseline.feh) >= 0.05;
+}
+
+// Returns true when the most recent lookup populated values that the
+// currently selected model can't handle — i.e., any of the four
+// "switch models" warning conditions hold. Used to suppress the
+// Source/citation line (no LDCs will be shown) and to block
+// auto-compute (the API would return a 400, the user already sees the
+// explanatory warning under the planet name). Manual clicks of
+// "Compute LDCs" are not blocked here; for the three Teff/log(g)
+// cases the API returns its own informative error message.
+function hasGridIncompatibility() {
+  if (hasSolarMismatch()) return true;
+  if (lookupBaseline === null) return false;
+  const model = $('model').value;
+  const teff = lookupBaseline.teff;
+  const logg = lookupBaseline.logg;
+  if (model === 'ATLAS' && typeof teff === 'number' && teff < 3500) return true;
+  if (model === 'PHOENIX' && typeof teff === 'number' && teff > 9800) return true;
+  if (model === 'PHOENIX' && typeof logg === 'number' && logg < 3.5) return true;
+  return false;
 }
 
 // Programmatically trigger the compute flow that the "Compute LDCs"
@@ -536,14 +556,16 @@ function hasSolarMismatch() {
 // existing submit handler fires unchanged — same validation, same
 // network call, same result rendering. If anything is missing, returns
 // quietly without disturbing the UI. Also refuses silently when the
-// solar-locked grid disagrees with the lookup's actual [Fe/H], since
-// the user already sees the explanatory warning under the planet name.
+// lookup populated values incompatible with the current model
+// (hasGridIncompatibility), since the user already sees the
+// explanatory warning under the planet name and pushing the API call
+// would only produce a redundant error message.
 function tryAutoCompute() {
   if (!$('filter').value) return;
   if (!$('teff').value.trim()) return;
   if (!$('logg').value.trim()) return;
   if (!$('feh').value.trim()) return;
-  if (hasSolarMismatch()) return;
+  if (hasGridIncompatibility()) return;
   form.requestSubmit();
 }
 
@@ -903,13 +925,14 @@ async function doLookup() {
     lookupStatusEl.appendChild(noteDiv);
   }
 
-  // Suppress the Source/citation line when the solar-mismatch guard
-  // will block LDC computation. Showing a citation when no result will
+  // Suppress the Source/citation line when the lookup populated values
+  // that the current model can't handle (any of the four "switch
+  // models" warning conditions). Showing a citation when no LDCs will
   // appear is confusing — the citation attributes nothing the user can
-  // see. The PHOENIX/non-zero-[Fe/H] warning below explains the
-  // situation; the citation can return once the user switches to ATLAS
-  // and reruns the lookup.
-  if (!hasSolarMismatch()) {
+  // see. The warning notes below explain the situation; the citation
+  // returns once the user switches to a compatible model and reruns
+  // the lookup.
+  if (!hasGridIncompatibility()) {
     const sourceLabel = data.source === 'NEA'
       ? 'NASA Exoplanet Archive Composite Parameters'
       : (data.source === 'ExoFOP'
