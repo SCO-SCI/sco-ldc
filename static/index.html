@@ -164,6 +164,9 @@
   </p>
 
 
+  
+
+
   <hr>
 
   <div class="row g-3">
@@ -820,16 +823,6 @@ async function doLookup() {
     addLookupLine(`Name: ${planet} not found.`, 'text-danger');
     const sugg = renderSuggestions(data.suggestions);
     if (sugg) addLookupLine(sugg, 'text-muted');
-    return;
-  }
-
-  
-  if (typeof data.feh === 'number' && (data.feh > 5.0 || data.feh < -5.0)) {
-    const direction = data.feh > 5.0 ? 'above' : 'below';
-    addLookupLine(
-      `This target is not supported because its value of [Fe/H] is ${direction} the limits of the supported tables.`,
-      'text-danger',
-    );
     return;
   }
 
