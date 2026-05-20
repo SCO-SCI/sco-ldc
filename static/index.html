@@ -827,6 +827,16 @@ async function doLookup() {
   }
 
   
+  if (typeof data.feh === 'number' && (data.feh > 5.0 || data.feh < -5.0)) {
+    const direction = data.feh > 5.0 ? 'above' : 'below';
+    addLookupLine(
+      `This target is not supported because its value of [Fe/H] is ${direction} the limits of the supported tables.`,
+      'text-danger',
+    );
+    return;
+  }
+
+  
   if (data.planet) {
     $('planetName').value = data.planet;
   }
