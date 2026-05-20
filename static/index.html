@@ -895,7 +895,7 @@ async function doLookup() {
   
   if (typeof data.teff === 'number' && data.teff < 3500 && $('model').value === 'ATLAS') {
     addLookupLine(
-      "Note: The ATLAS model does not support Teff below 3500 K. Switch to PHOENIX model.",
+      "The ATLAS model does not support Teff below 3500 K. Switch to PHOENIX model.",
       'text-danger',
     );
   }
@@ -904,13 +904,13 @@ async function doLookup() {
   if ($('model').value === 'PHOENIX') {
     if (typeof data.teff === 'number' && data.teff > 9800) {
       addLookupLine(
-        "Note: The PHOENIX model does not support Teff above 9800 K. Switch to ATLAS model.",
+        "The PHOENIX model does not support Teff above 9800 K. Switch to ATLAS model.",
         'text-danger',
       );
     }
     if (typeof data.logg === 'number' && data.logg < 3.5) {
       addLookupLine(
-        'Note: The PHOENIX model does not support Log(g) below 3.5. Switch to ATLAS model.',
+        'The PHOENIX model does not support Log(g) below 3.5. Switch to ATLAS model.',
         'text-danger',
       );
     }
@@ -919,12 +919,12 @@ async function doLookup() {
       const atlasFeasible = typeof data.teff === 'number' && data.teff >= 3500;
       if (atlasFeasible) {
         addLookupLine(
-          'Note: The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model and rerun planet Lookup.',
+          'The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model and rerun planet Lookup.',
           'text-danger',
         );
       } else {
         addLookupLine(
-          `Note: The PHOENIX subset supports only solar metallicity at this Teff. [Fe/H] = ${data.feh.toFixed(3)} has been treated as 0.0 for LDC computation.`,
+          `The PHOENIX subset supports only solar metallicity at this Teff. [Fe/H] = ${data.feh.toFixed(3)} has been treated as 0.0 for LDC computation.`,
           'text-muted',
         );
       }
