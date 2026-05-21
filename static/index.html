@@ -840,15 +840,6 @@ async function doLookup() {
   }
 
   
-  if (typeof data.logg === 'number' && data.logg > 5.0) {
-    addLookupLine(
-      "This target is not supported because its value of Log(g) is above the limits of the supported tables (5.0).",
-      'text-danger',
-    );
-    return;
-  }
-
-  
   if (data.planet) {
     $('planetName').value = data.planet;
   }
@@ -912,6 +903,15 @@ async function doLookup() {
           : data.source || 'unknown');
     const citationDetail = data.citation ? `, ${data.citation}` : '';
     addLookupLine(`Source: ${sourceLabel}${citationDetail}`, 'text-muted');
+  }
+
+  
+  if (typeof data.logg === 'number' && data.logg > 5.0) {
+    addLookupLine(
+      "This target is not supported because its value of Log(g) is above the limits of the supported tables (5.0).",
+      'text-danger',
+    );
+    return;
   }
 
   
