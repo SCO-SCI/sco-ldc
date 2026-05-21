@@ -152,7 +152,6 @@
   #lookupStatus.text-danger { font-weight: 500; }
   .compute-success {
     color: #198754 !important;
-	font-size: 0.85rem !important;
   }
   
 </style>
@@ -277,7 +276,7 @@
       <p class="law-eq mb-0">
         I(μ) / I(1) = 1 − u<sub>1</sub>·(1−μ) − u<sub>2</sub>·(1−μ)²
       </p>
-      <div id="computeResultMessage" class="mt-2 compute-success small"></div>
+      <div id="computeResultMessage" class="mt-2 compute-success fs-9"></div>
     </div>
 
   </div>
@@ -537,6 +536,40 @@ function renderUnsupportedLoggMessage() {
 }
 
 
+function renderLookupModelContext() {
+  
+  lookupStatusEl.querySelectorAll('.lookup-model-context').forEach(el => el.remove());
+
+  if (lookupBaseline === null) return;
+  if (typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > 5.0) return;
+
+  if (!hasGridIncompatibility()) {
+    const sourceLabel = lookupBaseline.source === 'NEA'
+      ? 'NASA Exoplanet Archive Composite Parameters'
+      : (lookupBaseline.source === 'ExoFOP'
+          ? 'ExoFOP-TESS'
+          : lookupBaseline.source || 'unknown');
+    const citationDetail = lookupBaseline.citation ? `, ${lookupBaseline.citation}` : '';
+    const div = document.createElement('div');
+    div.className = 'lookup-line text-muted lookup-model-context';
+    div.textContent = `Source: ${sourceLabel}${citationDetail}`;
+    lookupStatusEl.appendChild(div);
+  }
+
+  if ($('model').value === 'PHOENIX'
+      && typeof lookupBaseline.feh === 'number'
+      && Math.abs(lookupBaseline.feh) >= 0.05) {
+    const atlasFeasible = typeof lookupBaseline.teff === 'number' && lookupBaseline.teff >= 3500;
+    if (!atlasFeasible) {
+      const div = document.createElement('div');
+      div.className = 'lookup-line text-muted lookup-model-context';
+      div.textContent = `The PHOENIX subset supports only solar metallicity at this Teff. [Fe/H] = ${lookupBaseline.feh.toFixed(3)} has been treated as 0.0 for LDC computation.`;
+      lookupStatusEl.appendChild(div);
+    }
+  }
+}
+
+
 function hasGridIncompatibility() {
   if (hasSolarMismatch()) return true;
   if (lookupBaseline === null) return false;
@@ -556,7 +589,10 @@ function tryAutoCompute() {
   if (!$('teff').value.trim()) return;
   if (!$('logg').value.trim()) return;
   if (!$('feh').value.trim()) return;
-  if (hasGridIncompatibility()) return;
+  if (hasGridIncompatibility()) {
+    renderLookupModelContext();
+    return;
+  }
   form.requestSubmit();
 }
 
@@ -635,6 +671,7 @@ form.addEventListener('submit', async (ev) => {
   
   lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
   $('computeResultMessage').textContent = '';
+  renderLookupModelContext();
 
   try {
     const resp = await fetch('/api/compute?' + params.toString());
@@ -910,6 +947,8 @@ async function doLookup() {
     logg: (typeof data.logg === 'number') ? data.logg : null,
     feh:  (typeof data.feh  === 'number') ? data.feh  : (fehSubstituted ? 0.0 : null),
     feh_was_disabled: $('feh').disabled,
+    source: data.source,
+    citation: data.citation,
   };
 
   
@@ -925,15 +964,7 @@ async function doLookup() {
   }
 
   
-  if (!hasGridIncompatibility()) {
-    const sourceLabel = data.source === 'NEA'
-      ? 'NASA Exoplanet Archive Composite Parameters'
-      : (data.source === 'ExoFOP'
-          ? 'ExoFOP-TESS'
-          : data.source || 'unknown');
-    const citationDetail = data.citation ? `, ${data.citation}` : '';
-    addLookupLine(`Source: ${sourceLabel}${citationDetail}`, 'text-muted');
-  }
+  renderLookupModelContext();
 
   
   if (typeof data.logg === 'number' && data.logg > 5.0) {
@@ -970,11 +1001,6 @@ async function doLookup() {
         addLookupLine(
           'The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model and rerun planet Lookup.',
           'text-danger',
-        );
-      } else {
-        addLookupLine(
-          `The PHOENIX subset supports only solar metallicity at this Teff. [Fe/H] = ${data.feh.toFixed(3)} has been treated as 0.0 for LDC computation.`,
-          'text-muted',
         );
       }
     }
