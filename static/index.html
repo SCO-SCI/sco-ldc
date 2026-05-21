@@ -521,12 +521,28 @@ function hasSolarMismatch() {
 }
 
 
+function isLookupBaselineLoggUnsupported() {
+  if (lookupBaseline === null) return false;
+  return typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > 5.0;
+}
+
+
+function renderUnsupportedLoggMessage() {
+  lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
+  addLookupLine(
+    "This target is not supported because its value of Log(g) is above the limits of the supported tables (5.0).",
+    'text-danger',
+  );
+}
+
+
 function hasGridIncompatibility() {
   if (hasSolarMismatch()) return true;
   if (lookupBaseline === null) return false;
   const model = $('model').value;
   const teff = lookupBaseline.teff;
   const logg = lookupBaseline.logg;
+  if (typeof logg === 'number' && logg > 5.0) return true;
   if (model === 'ATLAS' && typeof teff === 'number' && teff < 3500) return true;
   if (model === 'PHOENIX' && typeof teff === 'number' && teff > 9800) return true;
   if (model === 'PHOENIX' && typeof logg === 'number' && logg < 3.5) return true;
@@ -591,6 +607,17 @@ form.addEventListener('submit', async (ev) => {
     $('planetName').value = '';
     clearLookupStatus();
     lookupBaseline = null;
+  }
+
+  
+  if (isLookupBaselineLoggUnsupported()) {
+    renderUnsupportedLoggMessage();
+    statusEl.textContent = '';
+    statusEl.classList.remove('text-danger', 'text-success');
+    statusEl.classList.add('text-muted');
+    $('computeResultMessage').textContent = '';
+    clearResult();
+    return;
   }
 
   const params = new URLSearchParams({
@@ -908,10 +935,7 @@ async function doLookup() {
 
   
   if (typeof data.logg === 'number' && data.logg > 5.0) {
-    addLookupLine(
-      "This target is not supported because its value of Log(g) is above the limits of the supported tables (5.0).",
-      'text-danger',
-    );
+    renderUnsupportedLoggMessage();
     return;
   }
 
