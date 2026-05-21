@@ -501,7 +501,7 @@ function paramsMatchBaseline() {
   if (!fieldMatchesBaseline($('logg').value, lookupBaseline.logg)) return false;
 
   
-  if (!$('feh').disabled) {
+  if (!$('feh').disabled && !lookupBaseline.feh_was_disabled) {
     if (!fieldMatchesBaseline($('feh').value, lookupBaseline.feh)) return false;
   }
 
@@ -908,6 +908,7 @@ async function doLookup() {
     teff: (typeof data.teff === 'number') ? data.teff : null,
     logg: (typeof data.logg === 'number') ? data.logg : null,
     feh:  (typeof data.feh  === 'number') ? data.feh  : (fehSubstituted ? 0.0 : null),
+    feh_was_disabled: $('feh').disabled,
   };
 
   
