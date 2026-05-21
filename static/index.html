@@ -150,6 +150,9 @@
   #lookupStatus .suggestion-link:hover { color: #001745; }
   #lookupStatus .lookup-line { margin-bottom: 0.1rem; }
   #lookupStatus.text-danger { font-weight: 500; }
+  .compute-success {
+    color: #198754 !important;
+  }
   
 </style>
 </head>
@@ -471,7 +474,7 @@ function setBusy(on, msg) {
   if (on) {
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Computing…';
     statusEl.textContent = msg || '';
-    statusEl.classList.remove('text-danger', 'text-success');
+    statusEl.classList.remove('text-danger', 'text-success', 'compute-success');
     statusEl.classList.add('text-muted');
   } else {
     submitBtn.innerHTML = 'Compute LDCs';
@@ -600,14 +603,17 @@ form.addEventListener('submit', async (ev) => {
   setBusy(true, '');
   clearResult();
 
+  
+  lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
+
   try {
     const resp = await fetch('/api/compute?' + params.toString());
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || resp.statusText);
     showResult(data);
-    statusEl.textContent = data.grid && data.grid.on_grid ? 'Exact grid point.' : ' ';
-    statusEl.classList.remove('text-danger', 'text-muted');
-    statusEl.classList.add('text-success');
+    statusEl.textContent = 'Calculated.';
+    statusEl.classList.remove('text-danger', 'text-muted', 'text-success');
+    statusEl.classList.add('compute-success');
   } catch (e) {
     statusEl.textContent = e.message;
 	
