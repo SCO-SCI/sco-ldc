@@ -809,6 +809,7 @@ async function doLookup() {
   lookupBaseline = null;
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+  $('computeResultMessage').textContent = '';
 
   setLookupBusy(true);
 
