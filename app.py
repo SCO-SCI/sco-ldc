@@ -199,7 +199,7 @@ _refresh_thread.start()
 logger.info("Refresh scheduler thread started")
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health() -> dict:
    
     return {
