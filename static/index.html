@@ -298,6 +298,10 @@
     using PHOENIX-COND spherical models at solar metallicity. For the CBB (Blue Blocking Exoplanet) filter, coefficients are from
     <a href="https://iopscience.iop.org/article/10.3847/2515-5172/ac8c3f" target="_blank" rel="noopener">Claret, Mullen &amp; Gary (2022) <em>RNAAS</em></a>,
     which were derived specifically for this filter using ATLAS9 atmosphere models.
+    For the CHEOPS filter, coefficients are from
+    <a href="https://iopscience.iop.org/article/10.3847/2515-5172/abdcb3" target="_blank" rel="noopener">Claret (2021, <em>RNAAS</em> 5, 13)</a>,
+    using ATLAS plane-parallel models across all tabulated metallicities and PHOENIX-COND
+    spherical models at solar metallicity, with the least-squares fitting method.
   </p>
 
   <p class="small text-muted mb-0">
@@ -402,6 +406,31 @@ function resolveModelEntry(filter, displayName) {
     return filter.models.find(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND') || null;
   }
   return null;
+}
+
+// --- Data-driven grid-bound helpers -------------------------------------
+// These read the true per-filter/per-model grid extents from the API data
+// (currentModelEntry) instead of hardcoded literals, so each filter respects
+// its own grid. The "other model" helper decides whether a "switch model"
+// suggestion is meaningful: a filter must actually provide the other model.
+
+function activeBounds() {
+  // Bounds for the currently selected filter + model, or null if unavailable.
+  return currentModelEntry || null;
+}
+
+function filterHasModel(displayName) {
+  // True if the currently selected filter offers the given model.
+  if (!currentFilter) return false;
+  if (displayName === 'ATLAS') {
+    return currentFilter.models.some(m => m.model === 'ATLAS');
+  }
+  return currentFilter.models.some(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND');
+}
+
+function otherModelName() {
+  // The display name of the model NOT currently selected ('ATLAS' <-> 'PHOENIX').
+  return $('model').value === 'ATLAS' ? 'PHOENIX' : 'ATLAS';
 }
 
 function onFilterChange() {
@@ -516,21 +545,33 @@ function hasSolarMismatch() {
   if (typeof lookupBaseline.feh !== 'number') return false;
   if (Math.abs(lookupBaseline.feh) < 0.05) return false;
   const teff = lookupBaseline.teff;
-  if (typeof teff !== 'number' || teff < 3500) return false;
+  if (typeof teff !== 'number') return false;
+  // ATLAS is the metallicity-capable alternative; the mismatch only matters if
+  // switching to ATLAS would actually be feasible at this Teff. Derive ATLAS's
+  // real Teff floor from the filter's grid rather than assuming 3500.
+  const atlasEntry = currentFilter
+    ? currentFilter.models.find(m => m.model === 'ATLAS')
+    : null;
+  if (!atlasEntry) return false;
+  if (teff < atlasEntry.teff_min) return false;
   return true;
 }
 
 
 function isLookupBaselineLoggUnsupported() {
   if (lookupBaseline === null) return false;
-  return typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > 5.0;
+  const b = activeBounds();
+  if (!b) return false;
+  return typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > b.logg_max;
 }
 
 
 function renderUnsupportedLoggMessage() {
   lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
+  const b = activeBounds();
+  const limit = b ? b.logg_max.toFixed(1) : '5.0';
   addLookupLine(
-    "This target is not supported because its value of Log(g) is above the limits of the supported tables (5.0).",
+    `This target is not supported because its value of Log(g) is above the limits of the supported tables (${limit}).`,
     'text-danger',
   );
 }
@@ -541,7 +582,8 @@ function renderLookupModelContext() {
   lookupStatusEl.querySelectorAll('.lookup-model-context').forEach(el => el.remove());
 
   if (lookupBaseline === null) return;
-  if (typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > 5.0) return;
+  const _b = activeBounds();
+  if (_b && typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > _b.logg_max) return;
 
   if (!hasGridIncompatibility()) {
     const sourceLabel = lookupBaseline.source === 'NEA'
@@ -573,13 +615,12 @@ function renderLookupModelContext() {
 function hasGridIncompatibility() {
   if (hasSolarMismatch()) return true;
   if (lookupBaseline === null) return false;
-  const model = $('model').value;
+  const b = activeBounds();
+  if (!b) return false;
   const teff = lookupBaseline.teff;
   const logg = lookupBaseline.logg;
-  if (typeof logg === 'number' && logg > 5.0) return true;
-  if (model === 'ATLAS' && typeof teff === 'number' && teff < 3500) return true;
-  if (model === 'PHOENIX' && typeof teff === 'number' && teff > 9800) return true;
-  if (model === 'PHOENIX' && typeof logg === 'number' && logg < 3.5) return true;
+  if (typeof logg === 'number' && (logg > b.logg_max || logg < b.logg_min)) return true;
+  if (typeof teff === 'number' && (teff > b.teff_max || teff < b.teff_min)) return true;
   return false;
 }
 
@@ -967,36 +1008,47 @@ async function doLookup() {
   renderLookupModelContext();
 
   
-  if (typeof data.logg === 'number' && data.logg > 5.0) {
+  if (isLookupBaselineLoggUnsupported()) {
     renderUnsupportedLoggMessage();
     return;
   }
 
+  const _lb = activeBounds();
+
   
-  if (typeof data.teff === 'number' && data.teff < 3500 && $('model').value === 'ATLAS') {
+  if (_lb && typeof data.teff === 'number' && data.teff < _lb.teff_min) {
+    const alt = filterHasModel('PHOENIX') && $('model').value === 'ATLAS'
+      ? ' Switch to PHOENIX model.' : '';
     addLookupLine(
-      "The ATLAS model does not support Teff below 3500 K. Switch to PHOENIX model.",
+      `The ${$('model').value === 'ATLAS' ? 'ATLAS' : currentModelEntry.model} model does not support Teff below ${_lb.teff_min.toFixed(0)} K.${alt}`,
       'text-danger',
     );
   }
 
   
-  if ($('model').value === 'PHOENIX') {
-    if (typeof data.teff === 'number' && data.teff > 9800) {
+  if (_lb) {
+    if (typeof data.teff === 'number' && data.teff > _lb.teff_max) {
+      const alt = filterHasModel('ATLAS') && $('model').value === 'PHOENIX'
+        ? ' Switch to ATLAS model.' : '';
       addLookupLine(
-        "The PHOENIX model does not support Teff above 9800 K. Switch to ATLAS model.",
+        `The ${currentModelEntry.model} model does not support Teff above ${_lb.teff_max.toFixed(0)} K.${alt}`,
         'text-danger',
       );
     }
-    if (typeof data.logg === 'number' && data.logg < 3.5) {
+    if (typeof data.logg === 'number' && data.logg < _lb.logg_min) {
+      const alt = filterHasModel('ATLAS') && $('model').value === 'PHOENIX'
+        ? ' Switch to ATLAS model.' : '';
       addLookupLine(
-        'The PHOENIX model does not support Log(g) below 3.5. Switch to ATLAS model.',
+        `The ${currentModelEntry.model} model does not support Log(g) below ${_lb.logg_min.toFixed(1)}.${alt}`,
         'text-danger',
       );
     }
-    if (typeof data.feh === 'number' && Math.abs(data.feh) >= 0.05) {
+    if ($('model').value === 'PHOENIX'
+        && typeof data.feh === 'number' && Math.abs(data.feh) >= 0.05) {
      
-      const atlasFeasible = typeof data.teff === 'number' && data.teff >= 3500;
+      const atlasEntry = currentFilter.models.find(m => m.model === 'ATLAS');
+      const atlasFeasible = atlasEntry && typeof data.teff === 'number'
+        && data.teff >= atlasEntry.teff_min;
       if (atlasFeasible) {
         addLookupLine(
           'The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model and rerun planet Lookup.',

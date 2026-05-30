@@ -38,6 +38,8 @@ FILTER_REGISTRY: List[Dict] = [
     # CBB (Blue Blocking Exoplanet).
     {"code": "CBB", "name": "CBB (Blue Blocking Exoplanet)",
                                                   "category": "Exoplanet",     "source": "CMG2022"},
+    # CHEOPS
+    {"code": "CHEOPS", "name": "CHEOPS",        "category": "Space-based",     "source": "C2021"},
 ]
 
 
@@ -45,6 +47,7 @@ SOURCE_CITATIONS: Dict[str, str] = {
     "CB2011":  "Claret & Bloemen (2011, A&A 529, A75)",
     "C2018":   "Claret (2018, A&A 618, A20)",
     "CMG2022": "Claret, Mullen & Gary (2022, RNAAS 6, 169)",
+    "C2021":   "Claret (2021, RNAAS 5, 13)",
 }
 
 
@@ -52,11 +55,13 @@ EXPECTED_MODELS: Dict[str, List[str]] = {
     "CB2011":  ["ATLAS", "PHOENIX"],   
     "C2018":   ["PHOENIX"],            
     "CMG2022": ["ATLAS"],
+    "C2021":   ["ATLAS", "PHOENIX"],
 }
 
 
 MODEL_DISPLAY_NAMES: Dict[Tuple[str, str], str] = {
     ("TESS", "PHOENIX"): "PHOENIX-COND",
+    ("CHEOPS", "PHOENIX"): "PHOENIX-COND",
 }
 
 
@@ -198,13 +203,58 @@ def _parse_cbbquadratic(path: str) -> int:
     return count
 
 
+def _parse_c2021(path: str, model: str) -> int:
+    # Claret (2021, RNAAS 5, 13) CHEOPS quadratic LDCs (a -> u1, b -> u2).
+    # The ZR column is log10[metal/H] and is stored on the feh axis, matching
+    # how CB2011 [Fe/H] is handled.
+    #
+    #   model="PHOENIX" -> table2.dat (PHOENIX-COND): 7 tokens, no velocity column,
+    #       single xi=2.0 km/s, solar metallicity only.
+    #           logg  Teff  ZR  a  b  mu-cri  chi2   (a,b at indices 3,4)
+    #   model="ATLAS"   -> table8.dat (ATLAS): 7 tokens, velocity column present
+    #       with {0,1,2,4,8} km/s; filter to xi=2.0 to match the rest of the service.
+    #           logg  Teff  ZR  Vel  a  b  chi2     (a,b at indices 4,5)
+    count = 0
+    with open(path, "r", encoding="ascii", errors="replace") as fh:
+        for raw in fh:
+            line = raw.rstrip("\r\n")
+            if not line.strip():
+                continue
+            parts = line.split()
+            if len(parts) != 7:
+                continue
+            try:
+                if model == "ATLAS":
+                    logg = float(parts[0])
+                    teff = float(parts[1])
+                    feh  = float(parts[2])
+                    vel  = float(parts[3])
+                    u1   = float(parts[4])
+                    u2   = float(parts[5])
+                    if abs(vel - 2.0) > 1e-6:
+                        continue
+                else:  # PHOENIX-COND
+                    logg = float(parts[0])
+                    teff = float(parts[1])
+                    feh  = float(parts[2])
+                    u1   = float(parts[3])
+                    u2   = float(parts[4])
+            except ValueError:
+                continue
+
+            _add_point(("C2021", "CHEOPS", model), teff, logg, feh, u1, u2)
+            count += 1
+    return count
+
+
 
 
 import pickle
 
 CACHE_FILENAME = "tables.pkl"
-CACHE_VERSION = 2        
-SOURCE_FILES = ("tableab.dat", "table5.dat", "CBBQUADRATIC.txt")
+CACHE_VERSION = 3        
+SOURCE_FILES = ("tableab.dat", "table5.dat", "CBBQUADRATIC.txt",
+                "table2.dat", "table8.dat")
 
 
 def _cache_is_fresh(cache_path: str, source_paths: List[str]) -> bool:
@@ -227,6 +277,8 @@ def _parse_all(data_dir: str) -> Dict[str, int]:
     counts["tableab.dat"]      = _parse_tableab(os.path.join(data_dir, "tableab.dat"))
     counts["table5.dat"]       = _parse_table5(os.path.join(data_dir, "table5.dat"))
     counts["CBBQUADRATIC.txt"] = _parse_cbbquadratic(os.path.join(data_dir, "CBBQUADRATIC.txt"))
+    counts["table2.dat"]       = _parse_c2021(os.path.join(data_dir, "table2.dat"), "PHOENIX")
+    counts["table8.dat"]       = _parse_c2021(os.path.join(data_dir, "table8.dat"), "ATLAS")
     _finalize_tables()
     return counts
 
@@ -390,6 +442,17 @@ def _nearest_available(data: Dict[Tuple[float, float, float], Tuple[float, float
     return cube, teff_vals, logg_vals, feh_vals
 
 
+def _filter_has_model(filter_code: str, storage_model: str) -> bool:
+    # True if the given filter actually provides a grid for the given storage
+    # model. Used to decide whether a "switch model" suggestion is meaningful:
+    # single-model filters (e.g. TESS, CBB) must not advise switching to a model
+    # they don't have.
+    for f in FILTER_REGISTRY:
+        if f["code"] == filter_code:
+            return storage_model in EXPECTED_MODELS.get(f["source"], [])
+    return False
+
+
 def compute_ldcs(teff: float, logg: float, feh: float,
                  filter_code: str, model: str
                  ) -> Dict[str, object]:
@@ -411,14 +474,14 @@ def compute_ldcs(teff: float, logg: float, feh: float,
     except ValueError as e:
         model_name = _display_model(filter_code, storage_model)
         if float(teff) < teffs[0]:
-            suggestion = " Use the PHOENIX model instead." if storage_model == "ATLAS" and filter_code != "TESS" else ""
+            suggestion = " Use the PHOENIX model instead." if storage_model == "ATLAS" and _filter_has_model(filter_code, "PHOENIX") else ""
             raise ValueError(
                 f"Invalid Input (Teff = {teff} K): "
                 f"The {model_name} model does not support values of Teff "
                 f"below {teffs[0]:.0f} K.{suggestion}"
             ) from e
         else:
-            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and filter_code != "TESS" else ""
+            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and _filter_has_model(filter_code, "ATLAS") else ""
             raise ValueError(
                 f"Invalid Input (Teff = {teff} K): "
                 f"The {model_name} model does not support values of Teff "
@@ -429,7 +492,7 @@ def compute_ldcs(teff: float, logg: float, feh: float,
     except ValueError as e:
         model_name = _display_model(filter_code, storage_model)
         if float(logg) < loggs[0]:
-            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and filter_code != "TESS" else ""
+            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and _filter_has_model(filter_code, "ATLAS") else ""
             raise ValueError(
                 f"Invalid Input (log g = {logg}): "
                 f"The {model_name} model does not support values of log g "

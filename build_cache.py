@@ -29,6 +29,17 @@ def main() -> int:
     print(f"wrote {cache_path} ({size_kb:.0f} KB)")
 
     
+    expected = {"table2.dat": 502, "table8.dat": 7695}
+    for fname, want in expected.items():
+        got = counts.get(fname)
+        if got != want:
+            print(f"ERROR: {fname} parsed {got} rows, expected {want} "
+                  f"(check the source file and the xi=2 km/s filter).",
+                  file=sys.stderr)
+            return 1
+    print("CHEOPS row counts verified (table2=502, table8=7695 at xi=2 km/s)")
+
+    
     t0 = time.perf_counter()
     counts2 = ldc_core.load_tables(data_dir, use_cache=True)
     load_ms = (time.perf_counter() - t0) * 1000
