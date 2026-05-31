@@ -204,16 +204,7 @@ def _parse_cbbquadratic(path: str) -> int:
 
 
 def _parse_c2021(path: str, model: str) -> int:
-    # Claret (2021, RNAAS 5, 13) CHEOPS quadratic LDCs (a -> u1, b -> u2).
-    # The ZR column is log10[metal/H] and is stored on the feh axis, matching
-    # how CB2011 [Fe/H] is handled.
-    #
-    #   model="PHOENIX" -> table2.dat (PHOENIX-COND): 7 tokens, no velocity column,
-    #       single xi=2.0 km/s, solar metallicity only.
-    #           logg  Teff  ZR  a  b  mu-cri  chi2   (a,b at indices 3,4)
-    #   model="ATLAS"   -> table8.dat (ATLAS): 7 tokens, velocity column present
-    #       with {0,1,2,4,8} km/s; filter to xi=2.0 to match the rest of the service.
-    #           logg  Teff  ZR  Vel  a  b  chi2     (a,b at indices 4,5)
+    
     count = 0
     with open(path, "r", encoding="ascii", errors="replace") as fh:
         for raw in fh:
@@ -443,10 +434,7 @@ def _nearest_available(data: Dict[Tuple[float, float, float], Tuple[float, float
 
 
 def _filter_has_model(filter_code: str, storage_model: str) -> bool:
-    # True if the given filter actually provides a grid for the given storage
-    # model. Used to decide whether a "switch model" suggestion is meaningful:
-    # single-model filters (e.g. TESS, CBB) must not advise switching to a model
-    # they don't have.
+   
     for f in FILTER_REGISTRY:
         if f["code"] == filter_code:
             return storage_model in EXPECTED_MODELS.get(f["source"], [])

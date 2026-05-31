@@ -1,0 +1,344 @@
+diff --git a/build_cache.py b/build_cache.py
+index 086b980..94befda 100644
+--- a/build_cache.py
++++ b/build_cache.py
+@@ -29,6 +29,17 @@ def main() -> int:
+     print(f"wrote {cache_path} ({size_kb:.0f} KB)")
+ 
+     
++    expected = {"table2.dat": 502, "table8.dat": 7695}
++    for fname, want in expected.items():
++        got = counts.get(fname)
++        if got != want:
++            print(f"ERROR: {fname} parsed {got} rows, expected {want} "
++                  f"(check the source file and the xi=2 km/s filter).",
++                  file=sys.stderr)
++            return 1
++    print("CHEOPS row counts verified (table2=502, table8=7695 at xi=2 km/s)")
++
++    
+     t0 = time.perf_counter()
+     counts2 = ldc_core.load_tables(data_dir, use_cache=True)
+     load_ms = (time.perf_counter() - t0) * 1000
+diff --git a/data/tables.pkl b/data/tables.pkl
+index c11e968..74e4b34 100644
+Binary files a/data/tables.pkl and b/data/tables.pkl differ
+diff --git a/ldc_core.py b/ldc_core.py
+index a914370..6da12d7 100644
+--- a/ldc_core.py
++++ b/ldc_core.py
+@@ -38,6 +38,8 @@ FILTER_REGISTRY: List[Dict] = [
+     # CBB (Blue Blocking Exoplanet).
+     {"code": "CBB", "name": "CBB (Blue Blocking Exoplanet)",
+                                                   "category": "Exoplanet",     "source": "CMG2022"},
++    # CHEOPS
++    {"code": "CHEOPS", "name": "CHEOPS",        "category": "Space-based",     "source": "C2021"},
+ ]
+ 
+ 
+@@ -45,6 +47,7 @@ SOURCE_CITATIONS: Dict[str, str] = {
+     "CB2011":  "Claret & Bloemen (2011, A&A 529, A75)",
+     "C2018":   "Claret (2018, A&A 618, A20)",
+     "CMG2022": "Claret, Mullen & Gary (2022, RNAAS 6, 169)",
++    "C2021":   "Claret (2021, RNAAS 5, 13)",
+ }
+ 
+ 
+@@ -52,11 +55,13 @@ EXPECTED_MODELS: Dict[str, List[str]] = {
+     "CB2011":  ["ATLAS", "PHOENIX"],   
+     "C2018":   ["PHOENIX"],            
+     "CMG2022": ["ATLAS"],
++    "C2021":   ["ATLAS", "PHOENIX"],
+ }
+ 
+ 
+ MODEL_DISPLAY_NAMES: Dict[Tuple[str, str], str] = {
+     ("TESS", "PHOENIX"): "PHOENIX-COND",
++    ("CHEOPS", "PHOENIX"): "PHOENIX-COND",
+ }
+ 
+ 
+@@ -198,13 +203,58 @@ def _parse_cbbquadratic(path: str) -> int:
+     return count
+ 
+ 
++def _parse_c2021(path: str, model: str) -> int:
++    # Claret (2021, RNAAS 5, 13) CHEOPS quadratic LDCs (a -> u1, b -> u2).
++    # The ZR column is log10[metal/H] and is stored on the feh axis, matching
++    # how CB2011 [Fe/H] is handled.
++    #
++    #   model="PHOENIX" -> table2.dat (PHOENIX-COND): 7 tokens, no velocity column,
++    #       single xi=2.0 km/s, solar metallicity only.
++    #           logg  Teff  ZR  a  b  mu-cri  chi2   (a,b at indices 3,4)
++    #   model="ATLAS"   -> table8.dat (ATLAS): 7 tokens, velocity column present
++    #       with {0,1,2,4,8} km/s; filter to xi=2.0 to match the rest of the service.
++    #           logg  Teff  ZR  Vel  a  b  chi2     (a,b at indices 4,5)
++    count = 0
++    with open(path, "r", encoding="ascii", errors="replace") as fh:
++        for raw in fh:
++            line = raw.rstrip("\r\n")
++            if not line.strip():
++                continue
++            parts = line.split()
++            if len(parts) != 7:
++                continue
++            try:
++                if model == "ATLAS":
++                    logg = float(parts[0])
++                    teff = float(parts[1])
++                    feh  = float(parts[2])
++                    vel  = float(parts[3])
++                    u1   = float(parts[4])
++                    u2   = float(parts[5])
++                    if abs(vel - 2.0) > 1e-6:
++                        continue
++                else:  # PHOENIX-COND
++                    logg = float(parts[0])
++                    teff = float(parts[1])
++                    feh  = float(parts[2])
++                    u1   = float(parts[3])
++                    u2   = float(parts[4])
++            except ValueError:
++                continue
++
++            _add_point(("C2021", "CHEOPS", model), teff, logg, feh, u1, u2)
++            count += 1
++    return count
++
++
+ 
+ 
+ import pickle
+ 
+ CACHE_FILENAME = "tables.pkl"
+-CACHE_VERSION = 2        
+-SOURCE_FILES = ("tableab.dat", "table5.dat", "CBBQUADRATIC.txt")
++CACHE_VERSION = 3        
++SOURCE_FILES = ("tableab.dat", "table5.dat", "CBBQUADRATIC.txt",
++                "table2.dat", "table8.dat")
+ 
+ 
+ def _cache_is_fresh(cache_path: str, source_paths: List[str]) -> bool:
+@@ -227,6 +277,8 @@ def _parse_all(data_dir: str) -> Dict[str, int]:
+     counts["tableab.dat"]      = _parse_tableab(os.path.join(data_dir, "tableab.dat"))
+     counts["table5.dat"]       = _parse_table5(os.path.join(data_dir, "table5.dat"))
+     counts["CBBQUADRATIC.txt"] = _parse_cbbquadratic(os.path.join(data_dir, "CBBQUADRATIC.txt"))
++    counts["table2.dat"]       = _parse_c2021(os.path.join(data_dir, "table2.dat"), "PHOENIX")
++    counts["table8.dat"]       = _parse_c2021(os.path.join(data_dir, "table8.dat"), "ATLAS")
+     _finalize_tables()
+     return counts
+ 
+@@ -390,6 +442,17 @@ def _nearest_available(data: Dict[Tuple[float, float, float], Tuple[float, float
+     return cube, teff_vals, logg_vals, feh_vals
+ 
+ 
++def _filter_has_model(filter_code: str, storage_model: str) -> bool:
++    # True if the given filter actually provides a grid for the given storage
++    # model. Used to decide whether a "switch model" suggestion is meaningful:
++    # single-model filters (e.g. TESS, CBB) must not advise switching to a model
++    # they don't have.
++    for f in FILTER_REGISTRY:
++        if f["code"] == filter_code:
++            return storage_model in EXPECTED_MODELS.get(f["source"], [])
++    return False
++
++
+ def compute_ldcs(teff: float, logg: float, feh: float,
+                  filter_code: str, model: str
+                  ) -> Dict[str, object]:
+@@ -411,14 +474,14 @@ def compute_ldcs(teff: float, logg: float, feh: float,
+     except ValueError as e:
+         model_name = _display_model(filter_code, storage_model)
+         if float(teff) < teffs[0]:
+-            suggestion = " Use the PHOENIX model instead." if storage_model == "ATLAS" and filter_code != "TESS" else ""
++            suggestion = " Use the PHOENIX model instead." if storage_model == "ATLAS" and _filter_has_model(filter_code, "PHOENIX") else ""
+             raise ValueError(
+                 f"Invalid Input (Teff = {teff} K): "
+                 f"The {model_name} model does not support values of Teff "
+                 f"below {teffs[0]:.0f} K.{suggestion}"
+             ) from e
+         else:
+-            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and filter_code != "TESS" else ""
++            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and _filter_has_model(filter_code, "ATLAS") else ""
+             raise ValueError(
+                 f"Invalid Input (Teff = {teff} K): "
+                 f"The {model_name} model does not support values of Teff "
+@@ -429,7 +492,7 @@ def compute_ldcs(teff: float, logg: float, feh: float,
+     except ValueError as e:
+         model_name = _display_model(filter_code, storage_model)
+         if float(logg) < loggs[0]:
+-            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and filter_code != "TESS" else ""
++            suggestion = " Use the ATLAS model instead." if storage_model == "PHOENIX" and _filter_has_model(filter_code, "ATLAS") else ""
+             raise ValueError(
+                 f"Invalid Input (log g = {logg}): "
+                 f"The {model_name} model does not support values of log g "
+diff --git a/static/index.html b/static/index.html
+index 261951c..a9f9823 100644
+--- a/static/index.html
++++ b/static/index.html
+@@ -298,6 +298,10 @@
+     using PHOENIX-COND spherical models at solar metallicity. For the CBB (Blue Blocking Exoplanet) filter, coefficients are from
+     <a href="https://iopscience.iop.org/article/10.3847/2515-5172/ac8c3f" target="_blank" rel="noopener">Claret, Mullen &amp; Gary (2022) <em>RNAAS</em></a>,
+     which were derived specifically for this filter using ATLAS9 atmosphere models.
++    For the CHEOPS filter, coefficients are from
++    <a href="https://iopscience.iop.org/article/10.3847/2515-5172/abdcb3" target="_blank" rel="noopener">Claret (2021, <em>RNAAS</em> 5, 13)</a>,
++    using ATLAS plane-parallel models across all tabulated metallicities and PHOENIX-COND
++    spherical models at solar metallicity, with the least-squares fitting method.
+   </p>
+ 
+   <p class="small text-muted mb-0">
+@@ -404,6 +408,31 @@ function resolveModelEntry(filter, displayName) {
+   return null;
+ }
+ 
++// --- Data-driven grid-bound helpers -------------------------------------
++// These read the true per-filter/per-model grid extents from the API data
++// (currentModelEntry) instead of hardcoded literals, so each filter respects
++// its own grid. The "other model" helper decides whether a "switch model"
++// suggestion is meaningful: a filter must actually provide the other model.
++
++function activeBounds() {
++  // Bounds for the currently selected filter + model, or null if unavailable.
++  return currentModelEntry || null;
++}
++
++function filterHasModel(displayName) {
++  // True if the currently selected filter offers the given model.
++  if (!currentFilter) return false;
++  if (displayName === 'ATLAS') {
++    return currentFilter.models.some(m => m.model === 'ATLAS');
++  }
++  return currentFilter.models.some(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND');
++}
++
++function otherModelName() {
++  // The display name of the model NOT currently selected ('ATLAS' <-> 'PHOENIX').
++  return $('model').value === 'ATLAS' ? 'PHOENIX' : 'ATLAS';
++}
++
+ function onFilterChange() {
+   const selectedCode = $('filter').value;
+ 
+@@ -516,21 +545,33 @@ function hasSolarMismatch() {
+   if (typeof lookupBaseline.feh !== 'number') return false;
+   if (Math.abs(lookupBaseline.feh) < 0.05) return false;
+   const teff = lookupBaseline.teff;
+-  if (typeof teff !== 'number' || teff < 3500) return false;
++  if (typeof teff !== 'number') return false;
++  // ATLAS is the metallicity-capable alternative; the mismatch only matters if
++  // switching to ATLAS would actually be feasible at this Teff. Derive ATLAS's
++  // real Teff floor from the filter's grid rather than assuming 3500.
++  const atlasEntry = currentFilter
++    ? currentFilter.models.find(m => m.model === 'ATLAS')
++    : null;
++  if (!atlasEntry) return false;
++  if (teff < atlasEntry.teff_min) return false;
+   return true;
+ }
+ 
+ 
+ function isLookupBaselineLoggUnsupported() {
+   if (lookupBaseline === null) return false;
+-  return typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > 5.0;
++  const b = activeBounds();
++  if (!b) return false;
++  return typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > b.logg_max;
+ }
+ 
+ 
+ function renderUnsupportedLoggMessage() {
+   lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
++  const b = activeBounds();
++  const limit = b ? b.logg_max.toFixed(1) : '5.0';
+   addLookupLine(
+-    "This target is not supported because its value of Log(g) is above the limits of the supported tables (5.0).",
++    `This target is not supported because its value of Log(g) is above the limits of the supported tables (${limit}).`,
+     'text-danger',
+   );
+ }
+@@ -541,7 +582,8 @@ function renderLookupModelContext() {
+   lookupStatusEl.querySelectorAll('.lookup-model-context').forEach(el => el.remove());
+ 
+   if (lookupBaseline === null) return;
+-  if (typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > 5.0) return;
++  const _b = activeBounds();
++  if (_b && typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > _b.logg_max) return;
+ 
+   if (!hasGridIncompatibility()) {
+     const sourceLabel = lookupBaseline.source === 'NEA'
+@@ -573,13 +615,12 @@ function renderLookupModelContext() {
+ function hasGridIncompatibility() {
+   if (hasSolarMismatch()) return true;
+   if (lookupBaseline === null) return false;
+-  const model = $('model').value;
++  const b = activeBounds();
++  if (!b) return false;
+   const teff = lookupBaseline.teff;
+   const logg = lookupBaseline.logg;
+-  if (typeof logg === 'number' && logg > 5.0) return true;
+-  if (model === 'ATLAS' && typeof teff === 'number' && teff < 3500) return true;
+-  if (model === 'PHOENIX' && typeof teff === 'number' && teff > 9800) return true;
+-  if (model === 'PHOENIX' && typeof logg === 'number' && logg < 3.5) return true;
++  if (typeof logg === 'number' && (logg > b.logg_max || logg < b.logg_min)) return true;
++  if (typeof teff === 'number' && (teff > b.teff_max || teff < b.teff_min)) return true;
+   return false;
+ }
+ 
+@@ -967,36 +1008,47 @@ async function doLookup() {
+   renderLookupModelContext();
+ 
+   
+-  if (typeof data.logg === 'number' && data.logg > 5.0) {
++  if (isLookupBaselineLoggUnsupported()) {
+     renderUnsupportedLoggMessage();
+     return;
+   }
+ 
++  const _lb = activeBounds();
++
+   
+-  if (typeof data.teff === 'number' && data.teff < 3500 && $('model').value === 'ATLAS') {
++  if (_lb && typeof data.teff === 'number' && data.teff < _lb.teff_min) {
++    const alt = filterHasModel('PHOENIX') && $('model').value === 'ATLAS'
++      ? ' Switch to PHOENIX model.' : '';
+     addLookupLine(
+-      "The ATLAS model does not support Teff below 3500 K. Switch to PHOENIX model.",
++      `The ${$('model').value === 'ATLAS' ? 'ATLAS' : currentModelEntry.model} model does not support Teff below ${_lb.teff_min.toFixed(0)} K.${alt}`,
+       'text-danger',
+     );
+   }
+ 
+   
+-  if ($('model').value === 'PHOENIX') {
+-    if (typeof data.teff === 'number' && data.teff > 9800) {
++  if (_lb) {
++    if (typeof data.teff === 'number' && data.teff > _lb.teff_max) {
++      const alt = filterHasModel('ATLAS') && $('model').value === 'PHOENIX'
++        ? ' Switch to ATLAS model.' : '';
+       addLookupLine(
+-        "The PHOENIX model does not support Teff above 9800 K. Switch to ATLAS model.",
++        `The ${currentModelEntry.model} model does not support Teff above ${_lb.teff_max.toFixed(0)} K.${alt}`,
+         'text-danger',
+       );
+     }
+-    if (typeof data.logg === 'number' && data.logg < 3.5) {
++    if (typeof data.logg === 'number' && data.logg < _lb.logg_min) {
++      const alt = filterHasModel('ATLAS') && $('model').value === 'PHOENIX'
++        ? ' Switch to ATLAS model.' : '';
+       addLookupLine(
+-        'The PHOENIX model does not support Log(g) below 3.5. Switch to ATLAS model.',
++        `The ${currentModelEntry.model} model does not support Log(g) below ${_lb.logg_min.toFixed(1)}.${alt}`,
+         'text-danger',
+       );
+     }
+-    if (typeof data.feh === 'number' && Math.abs(data.feh) >= 0.05) {
++    if ($('model').value === 'PHOENIX'
++        && typeof data.feh === 'number' && Math.abs(data.feh) >= 0.05) {
+      
+-      const atlasFeasible = typeof data.teff === 'number' && data.teff >= 3500;
++      const atlasEntry = currentFilter.models.find(m => m.model === 'ATLAS');
++      const atlasFeasible = atlasEntry && typeof data.teff === 'number'
++        && data.teff >= atlasEntry.teff_min;
+       if (atlasFeasible) {
+         addLookupLine(
+           'The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model and rerun planet Lookup.',
