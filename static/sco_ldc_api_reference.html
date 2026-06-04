@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCO-LDC API Reference</title>
+<meta name="description" content="HTTP/JSON API reference for sco-ldc: quadratic limb-darkening coefficients and exoplanet host-star parameter resolution.">
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+  body { background: #fff; font-size: 0.7rem; color: #000; }
+
+  a { color: #001f5b; }
+  a:hover { color: #001745; }
+
+  h1 { font-size: 1.35rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1rem; font-weight: 500; color: #000; }
+  h3 { font-size: 0.7rem; font-weight: 500; color: #000; margin-bottom: 0.25rem; }
+
+  .hint { color: #4c555d; font-weight: 400; font-size: 0.72rem; margin-left: 0.3rem; }
+
+  /* Section numbering pill — built from the site's navy palette */
+  .sec-num {
+    display: inline-block;
+    background: #001f5b;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 500;
+    border-radius: 0.2rem;
+    padding: 0.05rem 0.4rem;
+    margin-right: 0.4rem;
+    vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+  }
+
+  hr { margin: 0.75rem 0; }
+
+  /* Endpoint header line */
+  .endpoint-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    border: 1px solid #4c555d;
+    border-radius: 0.2rem;
+    padding: 0.35rem 0.6rem;
+    margin: 0.3rem 0 0.6rem;
+  }
+  .method {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    background: #5474a5;
+    color: #fff;
+    border-radius: 0.2rem;
+    padding: 0.1rem 0.45rem;
+  }
+  .endpoint-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    color: #001f5b;
+    font-weight: 500;
+  }
+
+  /* Inline code */
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    color: #001f5b;
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  /* Code / response blocks — terminal-style black screen */
+  pre.code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: #e6e6e6;
+    background: #000;
+    border: 1px solid #000;
+    border-radius: 0.2rem;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.6rem;
+    overflow-x: auto;
+  }
+  pre.code .c-key  { color: #7fb0ff; font-weight: 500; }
+  pre.code .c-str  { color: #6fdd8b; }
+  pre.code .c-num  { color: #f0a868; }
+  pre.code .c-bool { color: #ff7b72; }
+  pre.code .prompt { color: #6fdd8b; user-select: none; }
+
+  /* Tables — match .table-sm look */
+  table.api {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 0.7rem;
+  }
+  table.api th, table.api td {
+    border: 1px solid #4c555d;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
+    vertical-align: top;
+    text-align: left;
+  }
+  table.api thead th {
+    background: #fff;
+    font-weight: 700;
+    color: #000;
+  }
+  table.api td code { white-space: nowrap; }
+
+  .type {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    color: #4c555d;
+    white-space: nowrap;
+  }
+
+  /* Notes / lists */
+  ul.notes { padding-left: 1.1rem; margin-bottom: 0.5rem; }
+  ul.notes li { margin-bottom: 0.2rem; }
+
+  ol.flow { padding-left: 1.2rem; margin-bottom: 0.5rem; }
+  ol.flow li { margin-bottom: 0.25rem; }
+
+  .note-box {
+    border: 1px solid #4c555d;
+    border-left: 3px solid #5474a5;
+    border-radius: 0.2rem;
+    padding: 0.5rem 0.7rem;
+    margin: 0.5rem 0;
+    font-size: 0.8rem;
+  }
+  .note-box.warn { border-left-color: #cc0000; }
+
+  /* HTTP status chips */
+  .status-chip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    border-radius: 0.2rem;
+    padding: 0.05rem 0.35rem;
+  }
+  .s-2xx { background: transparent; color: #1d7a3e; }
+  .s-4xx { background: transparent; color: #cc0000; }
+  .s-422 { background: transparent; color: #8a5a00; }
+
+  /* Table of contents */
+  nav.toc {
+    border: 1px solid #4c555d;
+    border-radius: 0.2rem;
+    padding: 0.6rem 0.85rem;
+    margin-bottom: 0.75rem;
+    columns: 2;
+    column-gap: 1.5rem;
+  }
+  nav.toc a {
+    display: block;
+    text-decoration: none;
+    font-size: 0.8rem;
+    padding: 0.08rem 0;
+    break-inside: avoid;
+  }
+  nav.toc a:hover { text-decoration: underline; }
+  nav.toc .n { color: #4c555d; font-variant-numeric: tabular-nums; display: inline-block; min-width: 1.1rem; }
+  @media (max-width: 575px) { nav.toc { columns: 1; } }
+
+  section.doc-sec { scroll-margin-top: 0.75rem; }
+
+  footer { color: #4c555d; font-size: 0.75rem; }
+  footer a { color: inherit; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  .ver-tag {
+    font-size: 0.72rem;
+    color: #4c555d;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="container py-3" style="max-width: 820px; margin-top: 1.5rem;">
+
+  <h1 class="mb-1">SCO-LDC API Reference</h1>
+  <p class="ver-tag mb-1">API version 3.1 &middot; Document version 2026-06-03</p>
+  <p class="mb-2">
+    This document describes the HTTP/JSON API of <code>sco-ldc</code>, a web service that returns
+    quadratic limb-darkening coefficients (u<sub>1</sub>, u<sub>2</sub>) by trilinear interpolation of
+    published Claret coefficient tables, and that resolves exoplanet names to host-star stellar parameters
+    from the NASA Exoplanet Archive (NEA) and ExoFOP-TESS.
+  </p>
+  <p class="mb-2">
+    This reference is language-neutral and intended for any HTTP client (Java, JavaScript, Python, curl, etc.).
+    All requests are HTTPS GET. All response bodies are JSON. The API requires no authentication and accepts
+    unauthenticated cross-origin requests (CORS allow-origin is <code>*</code>).
+  </p>
+
+  <hr>
+
+  <nav class="toc">
+    <a href="#conventions"><span class="n">1</span>Conventions</a>
+    <a href="#versioning"><span class="n">2</span>Stability &amp; versioning</a>
+    <a href="#endpoints"><span class="n">3</span>Endpoints overview</a>
+    <a href="#health"><span class="n">4</span>GET /api/health</a>
+    <a href="#filters"><span class="n">5</span>GET /api/filters</a>
+    <a href="#resolve"><span class="n">6</span>GET /api/resolve</a>
+    <a href="#compute"><span class="n">7</span>GET /api/compute</a>
+    <a href="#errors"><span class="n">8</span>Error responses</a>
+    <a href="#impl"><span class="n">9</span>Implementation notes</a>
+    <a href="#examples"><span class="n">10</span>Example calls</a>
+    <a href="#code"><span class="n">11</span>Code</a>
+  </nav>
+
+  <hr>
+
+  <!-- 1. CONVENTIONS -->
+  <section id="conventions" class="doc-sec">
+    <h2><span class="sec-num">1</span>Conventions</h2>
+
+    <h3>Base URL</h3>
+    <p class="mb-2">All endpoints are served from <code>https://sco-ldc.com</code>. HTTPS is required; the service does not accept HTTP.</p>
+
+    <h3>Authentication</h3>
+    <p class="mb-2">None. sco-ldc&rsquo;s API is open and does not require API keys, tokens, registration, or any
+    other credential. Any HTTP client can call any endpoint at any time.</p>
+
+    <h3>Methods</h3>
+    <p class="mb-2">All endpoints accept GET requests only. There is no POST, PUT, or DELETE. This reflects the
+    read-only nature of the service: sco-ldc retrieves data and computes from it but does not store or modify
+    state on behalf of callers.</p>
+
+    <h3>Parameters</h3>
+    <p class="mb-2">All parameters are passed as URL query string parameters. There is no JSON request body.
+    Parameter names are case-sensitive. Numeric parameters can be passed as integers (<code>5778</code>) or as
+    decimals (<code>5778.0</code>); both are accepted. Filter codes are strings and case-sensitive.</p>
+
+    <h3>Response format</h3>
+    <p class="mb-2">All successful responses are JSON with HTTP status 200. The response Content-Type is
+    <code>application/json</code>. All field names use snake_case (e.g., <code>filter_code</code>, not
+    <code>filterCode</code>). Numeric fields are always JSON numbers (not strings); string fields are always
+    JSON strings (not numbers).</p>
+
+    <h3>URL encoding</h3>
+    <p class="mb-2">Filter codes containing special characters (the SDSS codes use an asterisk; planet names
+    typically contain spaces) must be URL-encoded in the request. Most HTTP client libraries handle this
+    automatically when parameters are passed as a structured dictionary or map rather than concatenated into the
+    URL string. If constructing URLs manually, ensure that asterisks become <code>%2A</code> and spaces become
+    <code>%20</code> or <code>+</code>.</p>
+  </section>
+
+  <hr>
+
+  <!-- 2. VERSIONING -->
+  <section id="versioning" class="doc-sec">
+    <h2><span class="sec-num">2</span>Stability &amp; versioning</h2>
+    <p class="mb-2">The API described here is treated as a stable contract. Once a caller integrates with sco-ldc,
+    the following are guaranteed:</p>
+    <ul class="notes">
+      <li>Existing parameter names will not be renamed</li>
+      <li>Existing response field names will not be renamed</li>
+      <li>Existing filter codes will not be reassigned to different filters</li>
+      <li>Existing semantics will be preserved (which model is the default, which endpoint serves which path, etc.)</li>
+    </ul>
+    <p class="mb-2">Additions are not considered breaking and may happen without coordination:</p>
+    <ul class="notes">
+      <li>New endpoints may be added at any time</li>
+      <li>New optional parameters may be added to existing endpoints</li>
+      <li>New response fields may be added to existing responses (callers should not fail if they encounter unknown fields)</li>
+    </ul>
+    <div class="note-box">
+      If breaking changes ever become necessary, they will be exposed through versioned URL paths
+      (e.g., <code>/api/v2/compute</code>) rather than by modifying the existing endpoints. Callers can continue
+      using the current endpoints on their own timeline and migrate when convenient.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- 3. ENDPOINTS OVERVIEW -->
+  <section id="endpoints" class="doc-sec">
+    <h2><span class="sec-num">3</span>Endpoints overview</h2>
+    <table class="api">
+      <thead><tr><th style="width:34%;">Endpoint</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span> <code>/api/health</code></td><td>Liveness probe and cache freshness diagnostic</td></tr>
+        <tr><td><span class="method">GET</span> <code>/api/filters</code></td><td>Catalog of supported filters and their model coverage</td></tr>
+        <tr><td><span class="method">GET</span> <code>/api/resolve</code></td><td>Resolve an exoplanet name or TOI to host-star T<sub>eff</sub>/logg/[Fe/H]</td></tr>
+        <tr><td><span class="method">GET</span> <code>/api/compute</code></td><td>Compute (u<sub>1</sub>, u<sub>2</sub>) given T<sub>eff</sub>, logg, [Fe/H], filter, and model</td></tr>
+      </tbody>
+    </table>
+    <h3>Typical integration flow</h3>
+    <ol class="flow">
+      <li><strong>(Optional, at startup or once per session.)</strong> Call <code>/api/filters</code> once to discover what filters and models are available, with their grid ranges. Cache the result locally.</li>
+      <li><strong>(Optional, per target.)</strong> Call <code>/api/resolve?planet=&lt;NAME&gt;</code> to fetch host-star T<sub>eff</sub>/logg/[Fe/H] from a planet or TOI name.</li>
+      <li><strong>(Per LDC requested.)</strong> Call <code>/api/compute?teff=&hellip;&amp;logg=&hellip;&amp;feh=&hellip;&amp;filter=&hellip;&amp;model=&hellip;</code> to obtain u<sub>1</sub> and u<sub>2</sub>.</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <!-- 4. HEALTH -->
+  <section id="health" class="doc-sec">
+    <h2><span class="sec-num">4</span>GET /api/health</h2>
+    <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/api/health</span></div>
+    <p class="mb-2">Returns a status snapshot. Useful for liveness checks and for verifying that the underlying data sources are fresh before relying on a lookup.</p>
+    <p class="mb-2"><strong>Required parameters:</strong> none. &middot; <strong>Optional parameters:</strong> none.</p>
+
+    <h3>Response (HTTP 200)</h3>
+    <pre class="code">{
+  <span class="c-key">"status"</span>: <span class="c-str">"ok"</span>,
+  <span class="c-key">"version"</span>: <span class="c-str">"3.1.0"</span>,
+  <span class="c-key">"freshness"</span>: <span class="c-str">"ok"</span>,
+  <span class="c-key">"tables"</span>: {
+    <span class="c-key">"tableab.dat"</span>: <span class="c-num">179645</span>,
+    <span class="c-key">"table5.dat"</span>: <span class="c-num">574</span>,
+    <span class="c-key">"CBBQUADRATIC.txt"</span>: <span class="c-num">7695</span>
+  },
+  <span class="c-key">"filter_count"</span>: <span class="c-num">26</span>,
+  <span class="c-key">"nea_cache"</span>:    { <span class="c-key">"count"</span>: <span class="c-num">6287</span>, <span class="c-key">"refreshed_utc"</span>: <span class="c-str">"2026-06-03 17:00 UTC"</span> },
+  <span class="c-key">"exofop_cache"</span>: { <span class="c-key">"count"</span>: <span class="c-num">7934</span>, <span class="c-key">"refreshed_utc"</span>: <span class="c-str">"2026-06-03 17:00 UTC"</span> }
+}</pre>
+
+    <h3>Field semantics</h3>
+    <table class="api">
+      <thead><tr><th style="width:26%;">Field</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>status</code></td><td><span class="type">string</span></td><td>Always &lsquo;ok&rsquo; if the response was generated at all</td></tr>
+        <tr><td><code>version</code></td><td><span class="type">string</span></td><td>Server-side application version identifier</td></tr>
+        <tr><td><code>freshness</code></td><td><span class="type">string</span></td><td>&lsquo;ok&rsquo; if both planet caches refreshed within 48 h; else &lsquo;stale&rsquo;</td></tr>
+        <tr><td><code>tables</code></td><td><span class="type">object</span></td><td>Row counts per source file. Keys are file names; values are integers</td></tr>
+        <tr><td><code>filter_count</code></td><td><span class="type">integer</span></td><td>Number of distinct filters loaded (currently 26)</td></tr>
+        <tr><td><code>nea_cache.count</code></td><td><span class="type">integer</span></td><td>Rows currently held in the NEA planet cache</td></tr>
+        <tr><td><code>nea_cache.refreshed_utc</code></td><td><span class="type">string</span></td><td>Last successful live refresh; null if never refreshed</td></tr>
+        <tr><td><code>exofop_cache.count</code></td><td><span class="type">integer</span></td><td>Rows in the ExoFOP TOI cache</td></tr>
+        <tr><td><code>exofop_cache.refreshed_utc</code></td><td><span class="type">string</span></td><td>Same convention as NEA</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Notes for callers</h3>
+    <ul class="notes">
+      <li>The <code>freshness</code> field is the recommended signal to monitor. Callers do not need to act on &lsquo;stale&rsquo; programmatically &mdash; the LDC computation continues to work &mdash; but it may be useful for diagnostic surfaces.</li>
+      <li>Cache row counts grow over time as NEA and ExoFOP add new entries. Exact numbers are informational.</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- 5. FILTERS -->
+  <section id="filters" class="doc-sec">
+    <h2><span class="sec-num">5</span>GET /api/filters</h2>
+    <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/api/filters</span></div>
+    <p class="mb-2">Returns the catalog of filters available and, per filter, which stellar atmosphere models are populated
+    along with their parameter grid ranges. Calling <code>/api/filters</code> is the authoritative way to discover what&rsquo;s
+    currently supported; new filters or new model coverage can appear in future versions.</p>
+    <p class="mb-2"><strong>Required parameters:</strong> none. &middot; <strong>Optional parameters:</strong> none.</p>
+
+    <h3>Response (HTTP 200, abbreviated to one filter entry)</h3>
+    <pre class="code">{
+  <span class="c-key">"filters"</span>: [
+    {
+      <span class="c-key">"code"</span>: <span class="c-str">"V"</span>,
+      <span class="c-key">"name"</span>: <span class="c-str">"Johnson V"</span>,
+      <span class="c-key">"category"</span>: <span class="c-str">"Johnson-Cousins"</span>,
+      <span class="c-key">"source"</span>: <span class="c-str">"CB2011"</span>,
+      <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Bloemen (2011, A&amp;A 529, A75)"</span>,
+      <span class="c-key">"models"</span>: [
+        {
+          <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
+          <span class="c-key">"model_key"</span>: <span class="c-str">"ATLAS"</span>,
+          <span class="c-key">"teff_min"</span>: <span class="c-num">3500.0</span>, <span class="c-key">"teff_max"</span>: <span class="c-num">50000.0</span>,
+          <span class="c-key">"logg_min"</span>: <span class="c-num">0.0</span>,    <span class="c-key">"logg_max"</span>: <span class="c-num">5.0</span>,
+          <span class="c-key">"feh_min"</span>:  <span class="c-num">-5.0</span>,   <span class="c-key">"feh_max"</span>:  <span class="c-num">1.0</span>,
+          <span class="c-key">"feh_fixed"</span>: <span class="c-bool">false</span>,
+          <span class="c-key">"n_points"</span>: <span class="c-num">7813</span>
+        },
+        {
+          <span class="c-key">"model"</span>: <span class="c-str">"PHOENIX"</span>,
+          <span class="c-key">"model_key"</span>: <span class="c-str">"PHOENIX"</span>,
+          <span class="c-key">"teff_min"</span>: <span class="c-num">2000.0</span>, <span class="c-key">"teff_max"</span>: <span class="c-num">9800.0</span>,
+          <span class="c-key">"logg_min"</span>: <span class="c-num">3.5</span>,    <span class="c-key">"logg_max"</span>: <span class="c-num">5.0</span>,
+          <span class="c-key">"feh_min"</span>:  <span class="c-num">0.0</span>,    <span class="c-key">"feh_max"</span>:  <span class="c-num">0.0</span>,
+          <span class="c-key">"feh_fixed"</span>: <span class="c-bool">true</span>,
+          <span class="c-key">"n_points"</span>: <span class="c-num">116</span>
+        }
+      ]
+    }
+  ]
+}</pre>
+
+    <h3>Field semantics (per filter entry)</h3>
+    <table class="api">
+      <thead><tr><th style="width:16%;">Field</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>code</code></td><td><span class="type">string</span></td><td>Filter code used in <code>/api/compute</code>. Case-sensitive</td></tr>
+        <tr><td><code>name</code></td><td><span class="type">string</span></td><td>Human-readable filter name</td></tr>
+        <tr><td><code>category</code></td><td><span class="type">string</span></td><td>Filter family: Johnson-Cousins, Sloan/SDSS, Str&ouml;mgren, Space-based, Other</td></tr>
+        <tr><td><code>source</code></td><td><span class="type">string</span></td><td>Internal source tag: CB2011, C2018, C2021, or CMG2022</td></tr>
+        <tr><td><code>citation</code></td><td><span class="type">string</span></td><td>Source&rsquo;s bibliographic citation</td></tr>
+        <tr><td><code>models</code></td><td><span class="type">array</span></td><td>List of model entries (typically 1 or 2 per filter)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Field semantics (per model entry)</h3>
+    <table class="api">
+      <thead><tr><th style="width:16%;">Field</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>model</code></td><td><span class="type">string</span></td><td>Display name used in <code>/api/compute</code>&rsquo;s model parameter</td></tr>
+        <tr><td><code>model_key</code></td><td><span class="type">string</span></td><td>Internal storage key; identical to model except for TESS (PHOENIX-COND displays as such but is stored as PHOENIX)</td></tr>
+        <tr><td><code>teff_min/max</code></td><td><span class="type">number</span></td><td>Grid extent in K. Inclusive bounds. Inputs outside fail</td></tr>
+        <tr><td><code>logg_min/max</code></td><td><span class="type">number</span></td><td>Grid extent in cgs dex</td></tr>
+        <tr><td><code>feh_min/max</code></td><td><span class="type">number</span></td><td>Grid extent in dex. For PHOENIX models, a single value at 0.0</td></tr>
+        <tr><td><code>feh_fixed</code></td><td><span class="type">boolean</span></td><td>true if the grid has only one [Fe/H] value (solar metallicity only)</td></tr>
+        <tr><td><code>n_points</code></td><td><span class="type">integer</span></td><td>Total grid points populated for this filter+model combination</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Notes for callers</h3>
+    <ul class="notes">
+      <li>Filter codes are case-sensitive. In particular, lowercase letters distinguish Str&ouml;mgren from uppercase Johnson: &ldquo;V&rdquo; is Johnson V; &ldquo;v&rdquo; is Str&ouml;mgren v. SDSS codes use a trailing asterisk: u*, g*, r*, i*, z*.</li>
+      <li>The complete current list of codes is: U, B, V, R, I, J, H, K, u, v, b, y, u*, g*, r*, i*, z*, Kp, C, S1, S2, S3, S4, TESS, CBB, CHEOPS.</li>
+      <li>The <code>model</code> parameter to <code>/api/compute</code> accepts the display name from the model field. Accepted values are &lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, and &lsquo;PHOENIX-COND&rsquo;. Not every filter supports every model; the models array per filter is the authoritative list.</li>
+      <li>When the <code>feh_fixed</code> flag is true, passing a feh value other than 0.0 to <code>/api/compute</code> will be rejected. The default feh=0.0 works correctly.</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- 6. RESOLVE -->
+  <section id="resolve" class="doc-sec">
+    <h2><span class="sec-num">6</span>GET /api/resolve</h2>
+    <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/api/resolve</span></div>
+    <p class="mb-2">Looks up an exoplanet name or TESS Object of Interest (TOI) candidate identifier and returns host-star
+    stellar parameters from the authoritative source (NEA for confirmed planets; ExoFOP-TESS for TOI candidates not in NEA).</p>
+
+    <h3>Required parameters</h3>
+    <table class="api">
+      <thead><tr><th style="width:16%;">Name</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>planet</code></td><td><span class="type">string</span></td><td>Planet name or TOI identifier. Case-insensitive on lookup</td></tr>
+      </tbody>
+    </table>
+    <p class="mb-2"><strong>Optional parameters:</strong> none.</p>
+
+    <h3>Examples of valid input</h3>
+    <ul class="notes">
+      <li><code>WASP-23 b</code></li>
+      <li><code>wasp-23 b</code> &nbsp;(case-insensitive)</li>
+      <li><code>HD 189733 b</code></li>
+      <li><code>TRAPPIST-1 e</code></li>
+      <li><code>TOI-700.01</code></li>
+      <li><code>TOI 700.01</code> &nbsp;(TOI prefix can use a space or hyphen)</li>
+    </ul>
+
+    <h3>Response when found (HTTP 200)</h3>
+    <pre class="code">{
+  <span class="c-key">"found"</span>: <span class="c-bool">true</span>,
+  <span class="c-key">"planet"</span>: <span class="c-str">"WASP-23 b"</span>,
+  <span class="c-key">"hostname"</span>: <span class="c-str">"WASP-23"</span>,
+  <span class="c-key">"teff"</span>: <span class="c-num">5150.0</span>,
+  <span class="c-key">"logg"</span>: <span class="c-num">4.4</span>,
+  <span class="c-key">"feh"</span>:  <span class="c-num">-0.05</span>,
+  <span class="c-key">"source"</span>: <span class="c-str">"NEA"</span>,
+  <span class="c-key">"citation"</span>: <span class="c-str">"DOI: 10.26133/NEA13"</span>
+}</pre>
+
+    <h3>Response when not found (HTTP 200, found=false)</h3>
+    <pre class="code">{
+  <span class="c-key">"found"</span>: <span class="c-bool">false</span>,
+  <span class="c-key">"planet"</span>: <span class="c-str">"&lt;input as supplied&gt;"</span>,
+  <span class="c-key">"reason"</span>: <span class="c-str">"not_in_nea"</span>,
+  <span class="c-key">"suggestions"</span>: [<span class="c-str">"WASP-23 b"</span>, <span class="c-str">"WASP-3 b"</span>, <span class="c-str">"WASP-43 b"</span>]
+}</pre>
+
+    <h3>Response on upstream error (HTTP 200, found=false)</h3>
+    <p class="mb-1" style="color:#4c555d;">This is only returned in a degraded mode (the server cache is empty and a live upstream query also failed). In normal operation this shape is not returned.</p>
+    <pre class="code">{
+  <span class="c-key">"found"</span>: <span class="c-bool">false</span>,
+  <span class="c-key">"planet"</span>: <span class="c-str">"&lt;input as supplied&gt;"</span>,
+  <span class="c-key">"reason"</span>: <span class="c-str">"error"</span>,
+  <span class="c-key">"error"</span>: <span class="c-str">"NEA query timed out"</span>
+}</pre>
+
+    <h3>Field semantics</h3>
+    <table class="api">
+      <thead><tr><th style="width:16%;">Field</th><th style="width:16%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>found</code></td><td><span class="type">boolean</span></td><td>true if the planet was resolved; false otherwise</td></tr>
+        <tr><td><code>planet</code></td><td><span class="type">string</span></td><td>Canonical planet name on success; raw input on failure</td></tr>
+        <tr><td><code>hostname</code></td><td><span class="type">string</span></td><td>Host star designation (e.g. &lsquo;WASP-23&rsquo;)</td></tr>
+        <tr><td><code>teff</code></td><td><span class="type">number / null</span></td><td>Effective temperature in K, or null if the source has no value</td></tr>
+        <tr><td><code>logg</code></td><td><span class="type">number / null</span></td><td>Surface gravity log g in cgs dex, or null</td></tr>
+        <tr><td><code>feh</code></td><td><span class="type">number / null</span></td><td>Metallicity [Fe/H] in dex, or null</td></tr>
+        <tr><td><code>source</code></td><td><span class="type">string</span></td><td>&lsquo;NEA&rsquo; or &lsquo;ExoFOP&rsquo;. Tells the caller which database served this</td></tr>
+        <tr><td><code>citation</code></td><td><span class="type">string</span></td><td>Citation for the source database</td></tr>
+        <tr><td><code>reason</code></td><td><span class="type">string</span></td><td>On failure: &lsquo;not_in_nea&rsquo;, &lsquo;not_in_exofop&rsquo;, or &lsquo;error&rsquo;</td></tr>
+        <tr><td><code>suggestions</code></td><td><span class="type">array&lt;string&gt;</span></td><td>On not_in_nea failure: up to 3 close-match planet names from NEA</td></tr>
+        <tr><td><code>error</code></td><td><span class="type">string</span></td><td>On error reason: a short human-readable explanation</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Citation strings returned</h3>
+    <ul class="notes">
+      <li>For NEA lookups: &lsquo;DOI: 10.26133/NEA13&rsquo;</li>
+      <li>For ExoFOP lookups: &lsquo;ExoFOP-TESS, NExScI/Caltech-IPAC&rsquo;</li>
+    </ul>
+
+    <h3>Notes for callers</h3>
+    <ul class="notes">
+      <li>Any of teff, logg, or feh may be null even on a found=true response. This is faithful to the source &mdash; some NEA/ExoFOP entries genuinely lack values for individual parameters. Callers should handle null and either prompt the user to supply a value or skip the LDC computation.</li>
+      <li>The source field tells the caller whether the values came from NEA&rsquo;s curated composite parameters table or from ExoFOP&rsquo;s TOI catalog. These pipelines can disagree by ~100 K on T<sub>eff</sub> or ~0.1 dex on [Fe/H] for the same star. This is expected and not an error.</li>
+      <li>Lookups are typically served from cache; expect sub-100 ms response.</li>
+      <li>The HTTP status code is 200 even on found=false. The body&rsquo;s found field is the success indicator. Callers should not branch on HTTP status alone for the resolve endpoint.</li>
+      <li>Inputs that look like TOI identifiers (e.g., TOI-700, TOI-700 b, TOI-700.01) are handled in a flexible manner. The name format TOI-700 and TOI-700 b will query NEA first and, if not found, will query ExoFOP as a backup. The name format TOI-700.01 will query ExoFOP first.  Callers do not need to implement this routing logic; just pass the user&rsquo;s input string and inspect the source field of the response to know where the values came from.</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- 7. COMPUTE -->
+  <section id="compute" class="doc-sec">
+    <h2><span class="sec-num">7</span>GET /api/compute</h2>
+    <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/api/compute</span></div>
+    <p class="mb-2">Computes quadratic limb-darkening coefficients (u<sub>1</sub>, u<sub>2</sub>) by trilinear interpolation of the
+    Claret table corresponding to the requested filter and atmosphere model. This is the main computational endpoint.</p>
+
+    <h3>Required parameters</h3>
+    <table class="api">
+      <thead><tr><th style="width:16%;">Name</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>teff</code></td><td><span class="type">number</span></td><td>Effective temperature in K</td></tr>
+        <tr><td><code>logg</code></td><td><span class="type">number</span></td><td>Surface gravity log g in cgs dex</td></tr>
+        <tr><td><code>filter</code></td><td><span class="type">string</span></td><td>Filter code from the <code>/api/filters</code> catalog. Case-sensitive</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Optional parameters</h3>
+    <table class="api">
+      <thead><tr><th style="width:16%;">Name</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>feh</code></td><td><span class="type">number</span></td><td>Metallicity [Fe/H] in dex. Defaults to 0.0 if omitted</td></tr>
+        <tr><td><code>model</code></td><td><span class="type">string</span></td><td>&lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, or &lsquo;PHOENIX-COND&rsquo;. Defaults to &lsquo;ATLAS&rsquo; if omitted</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Response on success (HTTP 200)</h3>
+    <pre class="code">{
+  <span class="c-key">"u1"</span>: <span class="c-num">0.5124</span>,
+  <span class="c-key">"u2"</span>: <span class="c-num">0.1558</span>,
+  <span class="c-key">"filter_code"</span>: <span class="c-str">"i*"</span>,
+  <span class="c-key">"filter_name"</span>: <span class="c-str">"SDSS i'"</span>,
+  <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
+  <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Bloemen (2011, A&amp;A 529, A75)"</span>,
+  <span class="c-key">"grid"</span>: {
+    <span class="c-key">"teff_bracket"</span>: [<span class="c-num">5000.0</span>, <span class="c-num">5250.0</span>],
+    <span class="c-key">"logg_bracket"</span>: [<span class="c-num">4.0</span>, <span class="c-num">4.5</span>],
+    <span class="c-key">"feh_bracket"</span>: [<span class="c-num">-0.5</span>, <span class="c-num">0.0</span>],
+    <span class="c-key">"fractions"</span>: { <span class="c-key">"teff"</span>: <span class="c-num">0.4</span>, <span class="c-key">"logg"</span>: <span class="c-num">0.8</span>, <span class="c-key">"feh"</span>: <span class="c-num">0.9</span> },
+    <span class="c-key">"on_grid"</span>: <span class="c-bool">false</span>
+  }
+}</pre>
+    <p class="mb-2" style="color:#4c555d;">(The numeric values above are illustrative; actual values from the live API may differ.)</p>
+
+    <h3>Response on invalid input (HTTP 400)</h3>
+    <pre class="code">{
+  <span class="c-key">"detail"</span>: <span class="c-str">"Invalid Input (Teff = 1500.0 K): The PHOENIX model does not support values of Teff below 2000 K."</span>
+}</pre>
+
+    <h3>Field semantics</h3>
+    <table class="api">
+      <thead><tr><th style="width:22%;">Field</th><th style="width:16%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>u1</code></td><td><span class="type">number</span></td><td>First quadratic LDC</td></tr>
+        <tr><td><code>u2</code></td><td><span class="type">number</span></td><td>Second quadratic LDC</td></tr>
+        <tr><td><code>filter_code</code></td><td><span class="type">string</span></td><td>The filter code that was used (echoes the input)</td></tr>
+        <tr><td><code>filter_name</code></td><td><span class="type">string</span></td><td>Human-readable filter name</td></tr>
+        <tr><td><code>model</code></td><td><span class="type">string</span></td><td>The model used (echoes/canonicalizes the input)</td></tr>
+        <tr><td><code>citation</code></td><td><span class="type">string</span></td><td>Source citation for the underlying Claret table</td></tr>
+        <tr><td><code>grid.teff_bracket</code></td><td><span class="type">[num, num]</span></td><td>The two grid T<sub>eff</sub> values bracketing the input</td></tr>
+        <tr><td><code>grid.logg_bracket</code></td><td><span class="type">[num, num]</span></td><td>Same for logg</td></tr>
+        <tr><td><code>grid.feh_bracket</code></td><td><span class="type">[num, num]</span></td><td>Same for [Fe/H]</td></tr>
+        <tr><td><code>grid.fractions.teff</code></td><td><span class="type">number</span></td><td>Interpolation fraction in [0, 1] along the T<sub>eff</sub> axis</td></tr>
+        <tr><td><code>grid.fractions.logg</code></td><td><span class="type">number</span></td><td>Same for logg</td></tr>
+        <tr><td><code>grid.fractions.feh</code></td><td><span class="type">number</span></td><td>Same for [Fe/H]</td></tr>
+        <tr><td><code>grid.on_grid</code></td><td><span class="type">boolean</span></td><td>true if the input falls exactly on a grid point (no interpolation)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Citation strings by source</h3>
+    <ul class="notes">
+      <li>CB2011 filters: &lsquo;Claret &amp; Bloemen (2011, A&amp;A 529, A75)&rsquo;</li>
+      <li>C2018 (TESS only): &lsquo;Claret (2018, A&amp;A 618, A20)&rsquo;</li>
+      <li>C2021 (CHEOPS only): &lsquo;Claret (2021, RNAAS 5, 13)&rsquo;</li>
+      <li>CMG2022 (CBB only): &lsquo;Claret, Mullen &amp; Gary (2022, RNAAS 6, 169)&rsquo;</li>
+    </ul>
+
+    <h3>Notes for callers</h3>
+    <ul class="notes">
+      <li>For PHOENIX models in CB2011, the [Fe/H] grid is degenerate (solar metallicity only). Passing feh=0.0 (the default) is correct; passing other values is rejected.</li>
+      <li>For TESS in the C2018 table, the [Fe/H] grid is similarly degenerate.</li>
+      <li>For CHEOPS in the C2021 table, ATLAS coefficients span all tabulated metallicities, while the PHOENIX-COND coefficients are at solar metallicity only.</li>
+      <li>Inputs outside the grid range raise HTTP 400 with a human-readable detail message. The error message often includes a suggestion for an alternative model (e.g., &lsquo;Use the PHOENIX model instead&rsquo; when an ATLAS request is below 3500 K).</li>
+      <li>u<sub>1</sub> and u<sub>2</sub> are returned as full-precision IEEE 754 doubles. The Claret published values are themselves to 4 decimal places; sco-ldc does not artificially round the interpolation result.</li>
+      <li>The grid block is informational. Callers that don&rsquo;t need interpolation diagnostics can ignore it.</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- 8. ERRORS -->
+  <section id="errors" class="doc-sec">
+    <h2><span class="sec-num">8</span>Error responses</h2>
+    <p class="mb-2">A summary of every error case the API can return:</p>
+    <table class="api">
+      <thead><tr><th>Scenario</th><th style="width:16%;">HTTP status</th><th>Body shape</th></tr></thead>
+      <tbody>
+        <tr><td>Healthy successful request</td><td><span class="status-chip s-2xx">200</span></td><td>Endpoint-specific success shape</td></tr>
+        <tr><td>/api/resolve planet not found</td><td><span class="status-chip s-2xx">200</span></td><td><code>{ "found": false, &hellip; }</code> (see /api/resolve)</td></tr>
+        <tr><td>/api/compute invalid input (out of range)</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip;" }</code></td></tr>
+        <tr><td>/api/compute unknown filter or model</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip;" }</code></td></tr>
+        <tr><td>Missing required query parameter</td><td><span class="status-chip s-422">422</span></td><td>FastAPI default validation error shape</td></tr>
+        <tr><td>Render upstream outage (rare)</td><td><span class="status-chip s-4xx">502 / 503</span></td><td>Render&rsquo;s load balancer page, not JSON</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note-box">
+      <strong>HTTP 422 note.</strong> If a required query parameter is missing entirely (e.g., calling <code>/api/compute</code>
+      without a filter parameter), the response is HTTP 422 with FastAPI&rsquo;s standard validation error shape, not HTTP 400.
+      The body in that case is <code>{"detail": [{"loc": [&hellip;], "msg": "&hellip;", "type": "&hellip;"}]}</code>. Callers should
+      handle 422 alongside 400 as &lsquo;client input was wrong.&rsquo;
+    </div>
+    <div class="note-box warn">
+      <strong>HTTP 502/503 note.</strong> If sco-ldc itself is unreachable (Render outage, cold-start in progress beyond the
+      response timeout), the response may come from Render&rsquo;s load balancer rather than from the application. This response
+      is HTML rather than JSON. Callers should not assume any non-200 response will be JSON; they should check the Content-Type
+      header before parsing.
+    </div>
+    <p class="mb-2">Callers should treat any non-2xx response as a generic failure unless they specifically want to surface the message from <code>detail</code>.</p>
+  </section>
+
+  <hr>
+
+  <!-- 9. IMPLEMENTATION NOTES -->
+  <section id="impl" class="doc-sec">
+    <h2><span class="sec-num">9</span>Implementation notes</h2>
+
+    <h3>Caching</h3>
+    <p class="mb-2">Both the NEA planet table and the ExoFOP TOI table are cached in-memory on the server and refreshed once daily
+    at 17:00 UTC. Callers do not need to invalidate or refetch on a faster cadence. Repeated <code>/api/resolve</code> calls for
+    the same planet within a session will return identical values until the next daily refresh.</p>
+
+    <h3>No rate limiting (currently)</h3>
+    <p class="mb-2">The API has no enforced rate limits. The architecture handles dozens of requests per second comfortably. That
+    said, individual workflows should not need more than a handful of calls per target, so this is not a real concern for normal use.</p>
+
+    <h3>Network failures</h3>
+    <p class="mb-2">If sco-ldc is unreachable (Render outage, DNS failure, network partition), the appropriate caller behavior is to
+    surface this to the user and fall back to manual entry. The server should not be assumed to be always available.</p>
+
+    <h3>Connection reuse</h3>
+    <p class="mb-2">For occasional individual calls, connection management is a minor optimization. For higher-volume callers (a
+    script processing many targets sequentially), it matters significantly: opening a fresh TLS connection per call adds
+    400&ndash;500 ms of handshake latency, while reusing an open connection eliminates this entirely. Most modern HTTP client
+    libraries handle connection reuse via configured connection pools.</p>
+
+    <h3>Recommended timeouts</h3>
+    <p class="mb-2">Connection timeout 10 seconds, read timeout 30 seconds. Compute calls typically respond in 50&ndash;100 ms;
+    resolve calls take a similar amount for cached planets and may take several seconds for live fallback queries when the cache
+    misses. The 30-second read timeout gives ample headroom for slow network conditions without aborting on transient blips.</p>
+
+    <h3>Filter discovery</h3>
+    <p class="mb-2">Callers should ideally call <code>/api/filters</code> once per session (at startup, or lazily on first use) to
+    discover the supported filters and grid ranges, rather than hardcoding the filter list. New filters may be added in future
+    versions; calling <code>/api/filters</code> keeps the caller current automatically.</p>
+
+    <h3>Citation surfacing</h3>
+    <p class="mb-2">Each <code>/api/resolve</code> and <code>/api/compute</code> response includes a citation field. If a caller
+    surfaces LDC values to a user, including the citation alongside (or in a tooltip) is the appropriate attribution and makes
+    traceability straightforward. The two citations from a chained resolve+compute call are typically both needed for complete
+    attribution in a publication.</p>
+  </section>
+
+  <hr>
+
+  <!-- 10. EXAMPLES -->
+  <section id="examples" class="doc-sec">
+    <h2><span class="sec-num">10</span>Example calls</h2>
+
+    <h3>Health check</h3>
+    <pre class="code">GET https://sco-ldc.com/api/health
+<span class="prompt">$</span> curl https://sco-ldc.com/api/health</pre>
+
+    <h3>Get filter catalog</h3>
+    <pre class="code">GET https://sco-ldc.com/api/filters
+<span class="prompt">$</span> curl https://sco-ldc.com/api/filters</pre>
+
+    <h3>Resolve a planet name</h3>
+    <pre class="code">GET https://sco-ldc.com/api/resolve?planet=WASP-23+b
+<span class="prompt">$</span> curl 'https://sco-ldc.com/api/resolve?planet=WASP-23%20b'</pre>
+
+    <h3>Resolve a TOI candidate</h3>
+    <pre class="code">GET https://sco-ldc.com/api/resolve?planet=TOI-700.01</pre>
+
+    <h3>Compute LDCs</h3>
+    <pre class="code">GET https://sco-ldc.com/api/compute?teff=5150&amp;logg=4.4&amp;feh=-0.05&amp;filter=V&amp;model=ATLAS
+<span class="prompt">$</span> curl 'https://sco-ldc.com/api/compute?teff=5150&amp;logg=4.4&amp;feh=-0.05&amp;filter=V&amp;model=ATLAS'</pre>
+
+    <h3>Compute with default metallicity</h3>
+    <pre class="code">GET https://sco-ldc.com/api/compute?teff=5150&amp;logg=4.4&amp;filter=V</pre>
+    <p class="mb-2" style="color:#4c555d;">Omitting <code>feh</code> defaults to 0.0; omitting <code>model</code> defaults to ATLAS.</p>
+
+    <h3>Full target-to-LDC chain</h3>
+    <p class="mb-2">To produce LDCs for WASP-23 b in Johnson V:</p>
+    <ol class="flow">
+      <li><code>GET /api/resolve?planet=WASP-23+b</code> returns teff, logg, feh values from NEA.</li>
+      <li><code>GET /api/compute?teff=&lt;&hellip;&gt;&amp;logg=&lt;&hellip;&gt;&amp;feh=&lt;&hellip;&gt;&amp;filter=V&amp;model=ATLAS</code> returns u<sub>1</sub> and u<sub>2</sub>.</li>
+    </ol>
+    <p class="mb-2">The two-step chain is the canonical pattern for integrators (such as AstroImageJ) where the user supplies a
+    planet name and the integration tool needs to populate LDCs automatically.</p>
+  </section>
+
+  <hr>
+
+  <!-- 11. CODE -->
+  <section id="code" class="doc-sec">
+    <h2><span class="sec-num">11</span>Code</h2>
+    <p class="mb-2">Source code repository:
+      <a href="https://github.com/SCO-SCI/sco-ldc" target="_blank" rel="noopener">https://github.com/SCO-SCI/sco-ldc</a>
+    </p>
+  </section>
+
+  <hr>
+
+  <footer class="text-end pb-2">
+    SCO-LDC v3.1.  Sycamore Canyon Observatory &middot;
+    <a href="mailto:sco.sci@outlook.com?subject=SCO-LDC%20inquiry" title="Email Ed Mullen">sco.sci@outlook.com</a>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
