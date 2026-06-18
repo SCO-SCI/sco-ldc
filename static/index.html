@@ -722,7 +722,7 @@ form.addEventListener('submit', async (ev) => {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || resp.statusText);
     showResult(data);
-    $('computeResultMessage').textContent = 'Calculated.';
+    $('computeResultMessage').textContent = 'Calculated';
     statusEl.textContent = '';
     statusEl.classList.remove('text-danger', 'text-muted', 'text-success');
   } catch (e) {
