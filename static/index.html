@@ -391,6 +391,7 @@ async function loadFilters() {
     sel.addEventListener('change', onFilterChange);
     $('model').addEventListener('change', onModelChange);
     onFilterChange();
+    refreshHints();   // show the current model's bounds immediately on load
   } catch (e) {
     statusEl.textContent = 'Could not load filters: ' + e.message;
     statusEl.classList.add('text-danger');
@@ -443,10 +444,8 @@ function onFilterChange() {
   if (!selectedCode) {
     currentFilter = null;
     currentModelEntry = null;
-    $('teffHint').textContent = '';
-    $('loggHint').textContent = '';
-    $('fehHint').textContent = '';
     $('feh').disabled = false;
+    refreshHints();   // show the selected model's bounds, not blank
     return;
   }
 
@@ -470,7 +469,12 @@ function onFilterChange() {
 }
 
 function onModelChange() {
-  if (!currentFilter) return;
+  if (!currentFilter) {
+    // No filter selected yet: still show the model's representative bounds.
+    currentModelEntry = null;
+    refreshHints();
+    return;
+  }
   let entry = resolveModelEntry(currentFilter, $('model').value);
 
   
@@ -482,22 +486,60 @@ function onModelChange() {
   }
 
   currentModelEntry = entry;
-  if (!currentModelEntry) return;
-  updateHints();
+  refreshHints();
 }
 
 function signed(v) { return (v >= 0 ? '+' : '') + Number(v).toFixed(1); }
 
 function updateHints() {
-  const e = currentModelEntry;
+  // Refresh hints from the best available source (filter+model entry, or a
+  // representative entry for the selected model when no filter is chosen).
+  refreshHints();
+}
+
+// Find bounds for a model name from any loaded filter that supports it, so
+// the limit hints can be shown before a filter is selected. Returns the entry
+// with the WIDEST logg range among supporting filters (matters only for the
+// PHOENIX-COND model, whose logg floor differs by filter).
+function representativeModelEntry(displayName) {
+  let best = null;
+  for (const f of FILTERS) {
+    const e = resolveModelEntry(f, displayName);
+    if (!e) continue;
+    if (!best || (e.logg_max - e.logg_min) > (best.logg_max - best.logg_min)) {
+      best = e;
+    }
+  }
+  return best;
+}
+
+function applyHintValues(e) {
+  if (!e) {
+    $('teffHint').textContent = '';
+    $('loggHint').textContent = '';
+    $('fehHint').textContent = '';
+    return;
+  }
   $('teffHint').textContent = `${e.teff_min.toFixed(0)} – ${e.teff_max.toFixed(0)}`;
   $('loggHint').textContent = `${e.logg_min.toFixed(1)} – ${e.logg_max.toFixed(1)}`;
   if (e.feh_fixed) {
     $('fehHint').textContent = `${signed(e.feh_min)} only (solar)`;
-    $('feh').value = e.feh_min.toFixed(1);
-    $('feh').disabled = true;
   } else {
     $('fehHint').textContent = `${signed(e.feh_min)} to ${signed(e.feh_max)}`;
+  }
+}
+
+function refreshHints() {
+  // Prefer the exact filter+model entry; fall back to a representative entry
+  // for the selected model when no filter is chosen yet.
+  let e = currentModelEntry;
+  if (!e) e = representativeModelEntry($('model').value);
+  applyHintValues(e);
+  // Solar-lock the feh field only on the exact (filter-confirmed) entry.
+  if (currentModelEntry && currentModelEntry.feh_fixed) {
+    $('feh').value = currentModelEntry.feh_min.toFixed(1);
+    $('feh').disabled = true;
+  } else if (currentModelEntry) {
     $('feh').disabled = false;
   }
 }
