@@ -6,11 +6,15 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import json
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 import ldc_core
 import nea_resolver
@@ -55,6 +59,42 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+
+
+
+# Traffic analytics
+access_logger = logging.getLogger("scoldc.access")
+
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.monotonic()
+        response = await call_next(request)
+        # Everything below is best-effort: logging must never break a request.
+        try:
+            elapsed_ms = round((time.monotonic() - start) * 1000.0, 1)
+            # Real client IP is in X-Forwarded-For (left-most) behind Render's proxy.
+            xff = request.headers.get("x-forwarded-for", "")
+            client_ip = xff.split(",")[0].strip() if xff else (
+                request.client.host if request.client else "")
+            entry = {
+                "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "method": request.method,
+                "path": request.url.path,          # path only, NEVER the query string
+                "status": response.status_code,
+                "ms": elapsed_ms,
+                "ip": client_ip,
+                "ua": request.headers.get("user-agent", ""),
+            }
+            access_logger.info(json.dumps(entry))
+        except Exception:
+            # Never let logging affect the response. Swallow everything.
+            pass
+        return response
+
+app.add_middleware(AccessLogMiddleware)
+
+
 
 
 LOAD_COUNTS = ldc_core.load_tables(DATA_DIR)
