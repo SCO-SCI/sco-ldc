@@ -467,3 +467,8 @@ def root():
             content={"error": "static/index.html is missing"},
         )
     return FileResponse(index_path, media_type="text/html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(os.path.join(STATIC_DIR, "icons", "favicon.ico"))
