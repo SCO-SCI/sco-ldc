@@ -291,7 +291,7 @@ def resolve(
             "found": False,
             "planet": planet,
             "reason": "tic_not_supported",
-            "message": "TIC name format not supported, please enter equivalent TOI name",
+            "message": "TIC name format not supported, please enter equivalent TOI name.",
             "suggestions": [],
         }
 

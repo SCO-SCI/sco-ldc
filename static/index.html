@@ -1009,7 +1009,7 @@ async function doLookup() {
   // single suggested TOI would be a guess, and the name-similarity matcher can
   // otherwise return a lexically similar but astronomically unrelated TOI.
   if (data.reason === 'tic_not_supported') {
-    addLookupLine(data.message || 'TIC name format not supported, please enter equivalent TOI name',
+    addLookupLine(data.message || 'TIC name format not supported, please enter equivalent TOI name.',
                   'text-danger');
     return;
   }
