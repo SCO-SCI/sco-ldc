@@ -74,6 +74,25 @@ def looks_like_toi(text: str) -> bool:
     return parse_toi_identifier(text) is not None
 
 
+# TIC (TESS Input Catalog) identifiers are NOT supported for resolution.
+# A single TIC can host MORE THAN ONE TOI, so the TIC -> TOI mapping is
+# one-to-many and cannot be resolved unambiguously to a single planet. Rather
+# than guess -- or, worse, let the fuzzy name-suggester return a lexically
+# similar but astronomically unrelated TOI -- the resolver detects TIC input
+# and returns a clear, dedicated message with NO suggestions. See resolve()
+# in app.py.
+_TIC_PATTERN = re.compile(r"^\s*TIC[\s\-_]*\d+(\.\d+)?\s*$", re.IGNORECASE)
+
+
+def looks_like_tic(text: str) -> bool:
+    """True if the input is a TIC identifier, e.g. 'TIC-138973825.01',
+    'TIC 138973825', 'tic138973825'. Digits are required after the 'TIC'
+    prefix so ordinary names (e.g. 'Ticino b') are not misclassified."""
+    if not isinstance(text, str) or not text:
+        return False
+    return _TIC_PATTERN.match(text) is not None
+
+
 def query_exofop(toi_input: str) -> dict:
     
     parsed = parse_toi_identifier(toi_input)

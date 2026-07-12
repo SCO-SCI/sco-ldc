@@ -280,6 +280,21 @@ def resolve(
     planet: str = Query(..., description="Exoplanet name (e.g. 'WASP-23 b') or TOI identifier (e.g. 'TOI-1234.01', 'TOI-1234 b', or 'TOI-1234')"),
 ) -> dict:
     
+    # TIC identifiers are not supported: a single TIC can host more than one TOI,
+    # so the mapping is one-to-many and cannot be resolved to a single planet.
+    # Return a dedicated message immediately -- BEFORE any NEA lookup or fuzzy
+    # suggestion -- and deliberately emit NO suggestions, so the name-similarity
+    # matcher cannot offer an astronomically unrelated TOI that merely happens to
+    # look similar as a character string.
+    if exofop_resolver.looks_like_tic(planet):
+        return {
+            "found": False,
+            "planet": planet,
+            "reason": "tic_not_supported",
+            "message": "TIC name format not supported, please enter equivalent TOI name",
+            "suggestions": [],
+        }
+
     canonical = nea_resolver.canonicalize_name(planet)
     query_name = canonical if canonical is not None else planet
 

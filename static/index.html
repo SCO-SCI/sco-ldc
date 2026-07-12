@@ -1004,6 +1004,16 @@ async function doLookup() {
     return;
   }
 
+  // TIC input: show ONLY the dedicated message. No "not found" line and no
+  // "Did you mean ...?" suggestion -- a TIC can host more than one TOI, so any
+  // single suggested TOI would be a guess, and the name-similarity matcher can
+  // otherwise return a lexically similar but astronomically unrelated TOI.
+  if (data.reason === 'tic_not_supported') {
+    addLookupLine(data.message || 'TIC name format not supported, please enter equivalent TOI name',
+                  'text-danger');
+    return;
+  }
+
   
   if (data.found !== true) {
     addLookupLine(`Name: ${planet} not found.`, 'text-danger');
