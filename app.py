@@ -280,20 +280,28 @@ def resolve(
     planet: str = Query(..., description="Exoplanet name (e.g. 'WASP-23 b') or TOI identifier (e.g. 'TOI-1234.01', 'TOI-1234 b', or 'TOI-1234')"),
 ) -> dict:
     
-    # TIC identifiers are not supported: a single TIC can host more than one TOI,
-    # so the mapping is one-to-many and cannot be resolved to a single planet.
-    # Return a dedicated message immediately -- BEFORE any NEA lookup or fuzzy
-    # suggestion -- and deliberately emit NO suggestions, so the name-similarity
-    # matcher cannot offer an astronomically unrelated TOI that merely happens to
-    # look similar as a character string.
-    if exofop_resolver.looks_like_tic(planet):
-        return {
-            "found": False,
-            "planet": planet,
-            "reason": "tic_not_supported",
-            "message": "TIC name format not supported, please enter equivalent TOI name.",
-            "suggestions": [],
-        }
+    
+    tic_int = exofop_resolver.parse_tic_identifier(planet)
+    if tic_int is not None:
+        # The notation the user wrote (".01" vs " b") decides only how the answer
+        # is formatted back; the star's ACTUAL planet count decides its shape.
+        tic_notation = exofop_resolver.parse_tic_notation(planet)
+
+        nea_tic_result = nea_resolver.query_nea_by_tic(tic_int, tic_notation)
+        if nea_tic_result is not None:
+            return nea_tic_result
+
+        exofop_tic_result = exofop_resolver.query_exofop_by_tic(planet)
+        if exofop_tic_result.get("found") is True:
+            return exofop_tic_result
+        if exofop_tic_result.get("reason") == "error":
+            return exofop_tic_result
+
+        # In neither catalogue. Suggestions are namespace-filtered by
+        # nea_resolver.get_suggestions(), so a TIC query yields only TIC
+        # candidates -- never a lexically similar but unrelated TOI.
+        exofop_tic_result["suggestions"] = nea_resolver.get_suggestions(planet)
+        return exofop_tic_result
 
     canonical = nea_resolver.canonicalize_name(planet)
     query_name = canonical if canonical is not None else planet

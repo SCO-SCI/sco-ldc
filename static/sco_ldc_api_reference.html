@@ -454,6 +454,9 @@
       <li><code>TRAPPIST-1 e</code></li>
       <li><code>TOI-700.01</code></li>
       <li><code>TOI 700.01</code> &nbsp;(TOI prefix can use a space or hyphen)</li>
+      <li><code>TIC-231663901</code> &nbsp;(TESS Input Catalog identifier &mdash; see &lsquo;TIC identifiers&rsquo; below)</li>
+      <li><code>TIC 231663901</code>, <code>tic231663901</code> &nbsp;(prefix may use a hyphen, one or more spaces, or nothing; case-insensitive)</li>
+      <li><code>TIC-231663901.01</code>, <code>TIC-231663901 b</code> &nbsp;(a planet component is accepted but does not select a planet &mdash; see below)</li>
     </ul>
 
     <h3>Response when found (HTTP 200)</h3>
@@ -490,15 +493,15 @@
       <thead><tr><th style="width:16%;">Field</th><th style="width:16%;">Type</th><th>Notes</th></tr></thead>
       <tbody>
         <tr><td><code>found</code></td><td><span class="type">boolean</span></td><td>true if the planet was resolved; false otherwise</td></tr>
-        <tr><td><code>planet</code></td><td><span class="type">string</span></td><td>Canonical planet name on success; raw input on failure</td></tr>
-        <tr><td><code>hostname</code></td><td><span class="type">string</span></td><td>Host star designation (e.g. &lsquo;WASP-23&rsquo;)</td></tr>
+        <tr><td><code>planet</code></td><td><span class="type">string</span></td><td>Canonical planet name on success; raw input on failure. For a TIC query this is the resolved <em>TIC</em> designation rather than a planet name &mdash; e.g. <code>TIC-231663901.01</code>, or <code>TIC-52368076 (all planets)</code> when the star hosts more than one planet. See &lsquo;TIC identifiers&rsquo; below.</td></tr>
+        <tr><td><code>hostname</code></td><td><span class="type">string</span></td><td>Host star designation (e.g. &lsquo;WASP-23&rsquo;). For a TIC query this is the hyphenated TIC, e.g. <code>TIC-231663901</code>.</td></tr>
         <tr><td><code>teff</code></td><td><span class="type">number / null</span></td><td>Effective temperature in K, or null if the source has no value</td></tr>
         <tr><td><code>logg</code></td><td><span class="type">number / null</span></td><td>Surface gravity log g in cgs dex, or null</td></tr>
         <tr><td><code>feh</code></td><td><span class="type">number / null</span></td><td>Metallicity [Fe/H] in dex, or null</td></tr>
         <tr><td><code>source</code></td><td><span class="type">string</span></td><td>&lsquo;NEA&rsquo; or &lsquo;ExoFOP&rsquo;. Tells the caller which database served this</td></tr>
         <tr><td><code>citation</code></td><td><span class="type">string</span></td><td>Citation for the source database</td></tr>
         <tr><td><code>reason</code></td><td><span class="type">string</span></td><td>On failure: &lsquo;not_in_nea&rsquo;, &lsquo;not_in_exofop&rsquo;, or &lsquo;error&rsquo;</td></tr>
-        <tr><td><code>suggestions</code></td><td><span class="type">array&lt;string&gt;</span></td><td>On not_in_nea failure: up to 3 close-match planet names from NEA</td></tr>
+        <tr><td><code>suggestions</code></td><td><span class="type">array&lt;string&gt;</span></td><td>On a not-found failure: up to 3 close-match names from NEA. Candidates are restricted to the <em>same identifier namespace</em> as the query: a TIC query is only ever offered TIC names, a TOI query only TOI names, and an ordinary name (WASP-, HD-, Kepler-, &hellip;) is never offered a TIC or TOI. May be an empty array.</td></tr>
         <tr><td><code>error</code></td><td><span class="type">string</span></td><td>On error reason: a short human-readable explanation</td></tr>
       </tbody>
     </table>
@@ -509,6 +512,71 @@
       <li>For ExoFOP lookups: &lsquo;ExoFOP-TESS, NExScI/Caltech-IPAC&rsquo;</li>
     </ul>
 
+    <h3>TIC identifiers</h3>
+    <p>The endpoint also accepts TESS Input Catalog (TIC) identifiers. A TIC names a
+    <strong>star</strong>, not a planet, and limb-darkening coefficients are a property of
+    the star alone &mdash; so a TIC resolves to that star&rsquo;s parameters, which every planet
+    and TOI candidate orbiting it shares.</p>
+
+    <p><strong>Accepted input</strong></p>
+    <p>The <code>TIC</code> prefix is case-insensitive and may be followed by a hyphen, one or
+    more spaces, an underscore, or nothing at all. All of the following are equivalent:</p>
+    <pre class="code">TIC-231663901    tic-231663901    TIC 231663901    tic 231663901
+TIC231663901     tic231663901     TIC  231663901   tic  231663901</pre>
+
+    <p>A trailing planet component is <strong>accepted but ignored for lookup purposes</strong>.
+    Both a TOI-style decimal (<code>.01</code>, <code>.02</code>, &hellip;) and a planet letter
+    (<code> b</code>, <code> c</code>, &hellip;) are tolerated. They do not select a planet:
+    a TIC has one host star, and all of its planets share that star&rsquo;s T<sub>eff</sub>,
+    log&nbsp;g and [Fe/H]. The component only influences how the resolved name is
+    <em>formatted</em> in the response.</p>
+
+    <p><strong>Resolution order</strong></p>
+    <p>A TIC is looked up in <strong>NEA first, then ExoFOP</strong>. Unlike a TOI &mdash; whose
+    <code>.01</code> versus <code> b</code> form signals which catalog is authoritative &mdash; a TIC is a
+    bare integer in both catalogs, so there is no format signal to branch on. NEA is preferred
+    because it holds <em>confirmed</em> planets (NEA names a small number of confirmed planets
+    directly after their TIC, e.g. host <code>TIC 139270665</code>); ExoFOP holds TOI
+    <em>candidates</em> and covers the large majority of TICs. The <code>source</code> field of the
+    response reports which catalog served the values.</p>
+
+    <p><strong>How the resolved name is returned</strong></p>
+    <p>Output always uses the hyphenated form. The <strong>star&rsquo;s actual planet count</strong>
+    determines the shape of the name; the <strong>notation the caller used</strong> determines its
+    format:</p>
+    <table class="api">
+      <thead><tr><th>Star</th><th>Input</th><th><code>planet</code> in response</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="5">Single planet<br>(e.g. TIC&nbsp;231663901)</td>
+            <td><code>TIC-231663901</code></td><td><code>TIC-231663901.01</code></td></tr>
+        <tr><td><code>TIC-231663901.01</code></td><td><code>TIC-231663901.01</code></td></tr>
+        <tr><td><code>TIC-231663901.02</code></td><td><code>TIC-231663901.01</code></td></tr>
+        <tr><td><code>TIC-231663901 b</code></td><td><code>TIC-231663901 b</code></td></tr>
+        <tr><td><code>TIC-231663901 c</code></td><td><code>TIC-231663901 b</code></td></tr>
+        <tr><td rowspan="3">Multiple planets<br>(e.g. TIC&nbsp;52368076)</td>
+            <td><code>TIC-52368076</code></td><td><code>TIC-52368076 (all planets)</code></td></tr>
+        <tr><td><code>TIC-52368076.03</code></td><td><code>TIC-52368076 (all planets)</code></td></tr>
+        <tr><td><code>TIC-52368076 d</code></td><td><code>TIC-52368076 (all planets)</code></td></tr>
+      </tbody>
+    </table>
+    <p>A caller who asks for a component the star does not have (<code>.02</code> or <code> c</code>
+    on a single-planet star) is returned the star&rsquo;s first planet in the notation they used.
+    The returned parameters are the same either way &mdash; they are the star&rsquo;s.</p>
+
+    <p><strong>Example</strong></p>
+    <pre class="code">GET /api/resolve?planet=TIC-231663901
+
+{
+  <span class="c-key">"found"</span>: <span class="c-bool">true</span>,
+  <span class="c-key">"planet"</span>: <span class="c-str">"TIC-231663901.01"</span>,
+  <span class="c-key">"hostname"</span>: <span class="c-str">"TIC-231663901"</span>,
+  <span class="c-key">"teff"</span>: <span class="c-num">5600.0</span>,
+  <span class="c-key">"logg"</span>: <span class="c-num">4.48851</span>,
+  <span class="c-key">"feh"</span>: <span class="c-bool">null</span>,
+  <span class="c-key">"source"</span>: <span class="c-str">"ExoFOP"</span>,
+  <span class="c-key">"citation"</span>: <span class="c-str">"NExScI/Caltech-IPAC"</span>
+}</pre>
+
     <h3>Notes for callers</h3>
     <ul class="notes">
       <li>Any of teff, logg, or feh may be null even on a found=true response. This is faithful to the source &mdash; some NEA/ExoFOP entries genuinely lack values for individual parameters. Callers should handle null and either prompt the user to supply a value or skip the LDC computation.</li>
@@ -516,6 +584,8 @@
       <li>Lookups are typically served from cache; expect sub-100 ms response.</li>
       <li>The HTTP status code is 200 even on found=false. The body&rsquo;s found field is the success indicator. Callers should not branch on HTTP status alone for the resolve endpoint.</li>
       <li>Inputs that look like TOI identifiers (e.g., TOI-700, TOI-700 b, TOI-700.01) are handled in a flexible manner. The name format TOI-700 and TOI-700 b will query NEA first and, if not found, will query ExoFOP as a backup. The name format TOI-700.01 will query ExoFOP first.  Callers do not need to implement this routing logic; just pass the user&rsquo;s input string and inspect the source field of the response to know where the values came from.</li>
+      <li>For a TIC query, the <code>planet</code> field is a TIC designation rather than a planet name, and may carry the marker <code>(all planets)</code>. Callers that parse this field should not assume it is a conventional planet name. The <code>hostname</code> field is always the plain hyphenated TIC.</li>
+      <li>Suggestions never cross identifier namespaces: a TIC query is only offered TIC names, a TOI query only TOI names, and an ordinary name is never offered a TIC or TOI. This prevents a lexically similar but astronomically unrelated identifier being proposed (for instance, a TIC being answered with a TOI that merely resembles it as a character string).</li>
     </ul>
   </section>
 

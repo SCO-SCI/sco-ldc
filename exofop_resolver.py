@@ -48,6 +48,8 @@ _COL_FEH = "Stellar Metallicity"
 _cache_lock = threading.Lock()
 _cache: dict[str, dict] = {}
 _host_index: dict[int, list[str]] = {}
+# TIC (int) -> canonical TOI strings on that star, component-sorted.
+_tic_index: dict[int, list[str]] = {}
 _last_successful_live_refresh_utc: Optional[datetime] = None
 
 
@@ -74,23 +76,82 @@ def looks_like_toi(text: str) -> bool:
     return parse_toi_identifier(text) is not None
 
 
-# TIC (TESS Input Catalog) identifiers are NOT supported for resolution.
-# A single TIC can host MORE THAN ONE TOI, so the TIC -> TOI mapping is
-# one-to-many and cannot be resolved unambiguously to a single planet. Rather
-# than guess -- or, worse, let the fuzzy name-suggester return a lexically
-# similar but astronomically unrelated TOI -- the resolver detects TIC input
-# and returns a clear, dedicated message with NO suggestions. See resolve()
-# in app.py.
-_TIC_PATTERN = re.compile(r"^\s*TIC[\s\-_]*\d+(\.\d+)?\s*$", re.IGNORECASE)
+
+_TIC_PATTERN = re.compile(
+    r"^\s*TIC[\s\-_]*(\d+)(?:(\.\d+)|(\s+[a-z]))?\s*$",
+    re.IGNORECASE,
+)
+
+
+TIC_NOTATION_DECIMAL = "decimal"   # ".01" style (also the default when none given)
+TIC_NOTATION_LETTER  = "letter"    # " b" style
+
+
+def parse_tic_notation(text: str) -> str:
+    
+    if not isinstance(text, str):
+        return TIC_NOTATION_DECIMAL
+    match = _TIC_PATTERN.match(text)
+    if not match:
+        return TIC_NOTATION_DECIMAL
+    return TIC_NOTATION_LETTER if match.group(3) else TIC_NOTATION_DECIMAL
+
+
+def format_tic_name(tic_int: int, planet_count: int, notation: str) -> str:
+    
+    if planet_count > 1:
+        return f"TIC-{tic_int} (all planets)"
+    if notation == TIC_NOTATION_LETTER:
+        return f"TIC-{tic_int} b"
+    return f"TIC-{tic_int}.01"
+
+
+def parse_tic_identifier(text: str) -> Optional[int]:
+    
+    if not isinstance(text, str):
+        return None
+    match = _TIC_PATTERN.match(text)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
 
 
 def looks_like_tic(text: str) -> bool:
-    """True if the input is a TIC identifier, e.g. 'TIC-138973825.01',
-    'TIC 138973825', 'tic138973825'. Digits are required after the 'TIC'
-    prefix so ordinary names (e.g. 'Ticino b') are not misclassified."""
-    if not isinstance(text, str) or not text:
-        return False
-    return _TIC_PATTERN.match(text) is not None
+    """True if the input is a TIC identifier (with or without a spurious
+    planet component)."""
+    return parse_tic_identifier(text) is not None
+
+
+def query_exofop_by_tic(tic_input: str) -> dict:
+    
+    tic_int = parse_tic_identifier(tic_input)
+    if tic_int is None:
+        return _error_response(tic_input, "Input is not a recognized TIC identifier")
+
+    canonicals = _tic_index.get(tic_int)
+    if not canonicals:
+        return {"found": False, "planet": tic_input, "reason": "not_in_exofop"}
+
+    first_canonical = canonicals[0]
+    row = _cache.get(first_canonical)
+    if row is None:
+        return {"found": False, "planet": tic_input, "reason": "not_in_exofop"}
+
+    return {
+        "found": True,
+        
+        "planet": format_tic_name(tic_int, len(canonicals),
+                                  parse_tic_notation(tic_input)),
+        "hostname": f"TIC-{tic_int}",
+        "teff": _to_float_or_none(row.get("st_teff")),
+        "logg": _to_float_or_none(row.get("st_logg")),
+        "feh":  _to_float_or_none(row.get("st_met")),
+        "source": "ExoFOP",
+        "citation": _full_citation(),
+    }
 
 
 def query_exofop(toi_input: str) -> dict:
@@ -342,9 +403,10 @@ def _set_cache(rows: list[dict], refresh_time: Optional[datetime]) -> None:
 
 def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> None:
     
-    global _cache, _host_index, _last_successful_live_refresh_utc
+    global _cache, _host_index, _tic_index, _last_successful_live_refresh_utc
     new_cache: dict[str, dict] = {}
     new_host_index: dict[int, list[str]] = {}
+    new_tic_index: dict[int, list[str]] = {}
     for row in rows:
         toi = row.get("toi")
         if not toi:
@@ -352,7 +414,19 @@ def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> Non
         if toi in new_cache:
             continue
         new_cache[toi] = row
-        
+
+        # TIC -> the canonical TOIs on that star. A TIC may host several TOIs
+        # (e.g. TIC 52368076 -> TOI-125.01/.02/.03/.04); they are candidates
+        # around the SAME star and share its stellar parameters, so any of them
+        # answers an LDC query. Indexed independently of the TOI host parse below
+        # so a malformed TOI string cannot silently drop the TIC mapping.
+        tic_raw = (row.get("tic") or "").strip()
+        if tic_raw:
+            try:
+                new_tic_index.setdefault(int(tic_raw), []).append(toi)
+            except (TypeError, ValueError):
+                pass
+
         try:
             host_str, comp_str = toi.split(".", 1)
             host_int = int(host_str)
@@ -362,9 +436,12 @@ def _set_cache_locked(rows: list[dict], refresh_time: Optional[datetime]) -> Non
    
     for host_int, components in new_host_index.items():
         components.sort(key=lambda s: _component_sort_key(s))
+    for tic_int, components in new_tic_index.items():
+        components.sort(key=lambda s: _component_sort_key(s))
 
     _cache = new_cache
     _host_index = new_host_index
+    _tic_index = new_tic_index
     if refresh_time is not None:
         _last_successful_live_refresh_utc = refresh_time
 

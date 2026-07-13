@@ -67,6 +67,22 @@ def query_nea(planet_name: str) -> dict:
     return _live_single_lookup(planet_name)
 
 
+def query_nea_by_tic(tic_int: int, notation: str = "decimal") -> Optional[dict]:
+    
+    if tic_int is None:
+        return None
+    rows = _hostname_index.get(f"tic {tic_int}".lower())
+    if not rows:
+        return None
+    resp = _row_to_response(rows[0])
+    
+    import exofop_resolver
+    resp["planet"] = exofop_resolver.format_tic_name(
+        tic_int, len(rows), notation)
+    resp["hostname"] = f"TIC-{tic_int}"
+    return resp
+
+
 def query_nea_by_host(hostname: str) -> Optional[dict]:
     
     if not hostname:
@@ -130,6 +146,18 @@ def canonicalize_name(name: str) -> Optional[str]:
     return row.get("pl_name") if row else None
 
 
+def _name_namespace(name: str) -> str:
+    
+    if not name:
+        return "other"
+    s = name.strip().lower()
+    if s.startswith("tic"):
+        return "tic"
+    if s.startswith("toi"):
+        return "toi"
+    return "other"
+
+
 def get_suggestions(query: str) -> list[str]:
    
     if not _cache or not query:
@@ -140,6 +168,18 @@ def get_suggestions(query: str) -> list[str]:
     with _cache_lock:
         keys_snapshot = list(_lower_keys)
         cache_snapshot = dict(_cache)
+
+    
+    ns = _name_namespace(query)
+    if ns == "tic":
+        keys_snapshot = [k for k in keys_snapshot if _name_namespace(k) == "tic"]
+    elif ns == "toi":
+        keys_snapshot = [k for k in keys_snapshot if _name_namespace(k) == "toi"]
+    else:
+        keys_snapshot = [k for k in keys_snapshot if _name_namespace(k) == "other"]
+
+    if not keys_snapshot:
+        return []
 
     lower_matches = difflib.get_close_matches(
         query_lower, keys_snapshot, n=SUGGESTION_LIMIT, cutoff=SUGGESTION_CUTOFF,

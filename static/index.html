@@ -433,11 +433,7 @@ function resolveModelEntry(filter, displayName) {
   return null;
 }
 
-// --- Data-driven grid-bound helpers -------------------------------------
-// These read the true per-filter/per-model grid extents from the API data
-// (currentModelEntry) instead of hardcoded literals, so each filter respects
-// its own grid. The "other model" helper decides whether a "switch model"
-// suggestion is meaningful: a filter must actually provide the other model.
+
 
 function activeBounds() {
   // Bounds for the currently selected filter + model, or null if unavailable.
@@ -513,15 +509,11 @@ function onModelChange() {
 function signed(v) { return (v >= 0 ? '+' : '') + Number(v).toFixed(1); }
 
 function updateHints() {
-  // Refresh hints from the best available source (filter+model entry, or a
-  // representative entry for the selected model when no filter is chosen).
+  
   refreshHints();
 }
 
-// Find bounds for a model name from any loaded filter that supports it, so
-// the limit hints can be shown before a filter is selected. Returns the entry
-// with the WIDEST logg range among supporting filters (matters only for the
-// PHOENIX-COND model, whose logg floor differs by filter).
+
 function representativeModelEntry(displayName) {
   let best = null;
   for (const f of FILTERS) {
@@ -1004,10 +996,7 @@ async function doLookup() {
     return;
   }
 
-  // TIC input: show ONLY the dedicated message. No "not found" line and no
-  // "Did you mean ...?" suggestion -- a TIC can host more than one TOI, so any
-  // single suggested TOI would be a guess, and the name-similarity matcher can
-  // otherwise return a lexically similar but astronomically unrelated TOI.
+  
   if (data.reason === 'tic_not_supported') {
     addLookupLine(data.message || 'TIC name format not supported, please enter equivalent TOI name.',
                   'text-danger');
