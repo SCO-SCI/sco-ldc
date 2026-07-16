@@ -35,6 +35,8 @@
   h1 { font-size: 1.35rem; margin-bottom: 0.15rem; }
   h2 { font-size: 1rem; font-weight: 600; }
   .hint { color: #4c555d; font-weight: 400; font-size: 0.72rem; margin-left: 0.3rem; }
+  .top-section .hint.tic-note,
+  .hint.tic-note { color: #5474a5 !important; font-weight: 600; margin-left: 0; margin-top: 0.1rem; margin-bottom: 0.35rem; display: block; }
   label.form-label { font-size: 0.8rem; font-weight: 500; margin-bottom: 0.1rem; }
   .form-control, .form-select { font-size: 0.825rem; padding: 0.25rem 0.5rem; border-color: #4c555d; border-radius: 0.2rem; }    
   .form-control:focus, .form-select:focus { border-color: #000; box-shadow: 0 0 0 0.2rem rgba(0,31,91,0.15); }
@@ -206,8 +208,9 @@
             <label for="planetName" class="form-label">
               Exoplanet name<span class="hint">e.g. WASP-23 b or TOI-700.01</span>
             </label>
+            <div class="hint tic-note">Note: TIC names are now supported.</div>
             <div class="planet-row">
-              <input type="text" class="form-control" id="planetName" name="planetName" placeholder="Enter planet name or TOI...">
+              <input type="text" class="form-control" id="planetName" name="planetName" placeholder="Enter planet name, TIC, or TOI...">
               <button type="button" class="btn btn-primary" id="lookupBtn">Look up</button>
             </div>
             <div id="lookupStatus" class="mt-1 small"></div>
