@@ -172,7 +172,12 @@ def get_suggestions(query: str) -> list[str]:
     
     ns = _name_namespace(query)
     if ns == "tic":
-        keys_snapshot = [k for k in keys_snapshot if _name_namespace(k) == "tic"]
+        # TIC lookups resolve against ExoFOP, so mistyped TICs must be matched
+        # against ExoFOP's ~7,600 TICs -- not NEA's ~57 TIC-named planets, which
+        # is the wrong catalogue and far too small to be useful. Delegate to the
+        # module that owns the TIC index.
+        import exofop_resolver
+        return exofop_resolver.get_tic_suggestions(query, limit=SUGGESTION_LIMIT)
     elif ns == "toi":
         keys_snapshot = [k for k in keys_snapshot if _name_namespace(k) == "toi"]
     else:

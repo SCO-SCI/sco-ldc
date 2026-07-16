@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import difflib
 import threading
 from datetime import datetime, timezone
 from typing import Optional
@@ -117,6 +118,31 @@ def parse_tic_identifier(text: str) -> Optional[int]:
         return int(match.group(1))
     except (TypeError, ValueError):
         return None
+
+
+def get_tic_suggestions(query: str, limit: int = 3, cutoff: float = 0.6) -> list[str]:
+    """Suggest real TICs for a mistyped TIC query, formatted as 'TIC-<n>'.
+
+    TIC lookups resolve against ExoFOP (7,600+ TICs), so a mistyped TIC must be
+    matched against THAT population -- not NEA's ~57 TIC-named planets, which is
+    the wrong catalogue and far too small to offer a useful "did you mean". We
+    fuzzy-match the bare digits the user typed against the ExoFOP TIC index.
+
+    A short fragment (e.g. "TIC-3") legitimately yields nothing: "3" is not a
+    plausible typo of any 9-digit TIC, so there is no honest suggestion to make.
+    Returns [] rather than inventing noise.
+    """
+    tic_int = parse_tic_identifier(query)
+    if tic_int is None:
+        digits = "".join(ch for ch in (query or "") if ch.isdigit())
+    else:
+        digits = str(tic_int)
+    if not digits:
+        return []
+    candidates = [str(t) for t in _tic_index.keys()]
+    matches = difflib.get_close_matches(digits, candidates, n=limit, cutoff=cutoff)
+    # don't echo back the exact value the user typed (it was already "not found")
+    return [f"TIC-{m}" for m in matches if m != digits]
 
 
 def looks_like_tic(text: str) -> bool:
